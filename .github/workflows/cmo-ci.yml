@@ -1,0 +1,56 @@
+name: Cache-Me-Outside
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: cmo-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    name: Build and test subset
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install build and test packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config tcl tcl8.6 tclx
+
+      - name: Build server
+        run: make -j"$(nproc)" SERVER_CFLAGS='-Werror'
+
+      - name: Run a fast Valkey test subset
+        run: |
+          ./runtest --dump-logs \
+            --single unit/cmo-version \
+            --single unit/auth \
+            --single unit/acl \
+            --single unit/protocol \
+            --single unit/keyspace \
+            --single unit/info \
+            --single unit/introspection
+
+  image:
+    name: Docker image and smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Build, smoke, and a short benchmark
+        run: |
+          cd deploy
+          ./smoke.sh --generate-env
+          CMO_BENCH_REQUESTS=10000 CMO_BENCH_CLIENTS=10 ./bench.sh
+          docker image ls cache-me-outside:local
+          docker compose down -v

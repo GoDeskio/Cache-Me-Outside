@@ -32,6 +32,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 #include "server.h"
+#include "cmo_version.h"
 #include "hotkeys.h"
 #include "ordered_index.h"
 #include "connection.h"
@@ -6529,6 +6530,8 @@ sds genValkeyInfoString(dict *section_dict, int all_sections, int everything) {
                 "io_threads_active:%i\r\n", server.active_io_threads_num > 1,
                 "availability_zone:%s\r\n", server.availability_zone));
 
+        info = sdscatfmt(info, "cmo_version:%s\r\n", CMO_VERSION);
+
         /* Conditional properties */
         if (isShutdownInitiated()) {
             info = sdscatfmt(info, "shutdown_in_milliseconds:%I\r\n",
@@ -8141,6 +8144,7 @@ __attribute__((weak)) int main(int argc, char **argv) {
     serverLog(LL_NOTICE, "oO0OoO0OoO0Oo Valkey is starting oO0OoO0OoO0Oo");
     serverLog(LL_NOTICE, "Valkey version=%s, bits=%d, commit=%s, modified=%d, pid=%d, just started", VALKEY_VERSION,
               (sizeof(long) == 8) ? 64 : 32, serverGitSHA1(), strtol(serverGitDirty(), NULL, 10) > 0, (int)getpid());
+    serverLog(LL_NOTICE, "Cache-Me-Outside build=%s", CMO_VERSION);
 
     if (argc == 1) {
         serverLog(LL_WARNING,
