@@ -21,8 +21,7 @@ sudo apt-get install tcl tcl8.6 tclx
   --single unit/acl \
   --single unit/protocol \
   --single unit/keyspace \
-  --single unit/info \
-  --single unit/introspection
+  --single unit/info
 ```
 
 `tests/unit/cmo-version.tcl` checks that `cmo_version` is `<valkey_version>-cmo` and that `valkey_version` has no suffix.
