@@ -25,6 +25,53 @@ done
 
 ./cluster-add.sh primary
 
+# Slot ownership is gossiped after the reshard returns. A cluster-aware GET
+# in that window can miss a key that is already on its new primary.
+wait_stable() {
+    # shellcheck disable=SC1091
+    source .generated/state
+    local names=() spec nodes_out i
+    names=()
+    for spec in "${nodes[@]}"; do
+        # shellcheck disable=SC2086
+        set -- $spec
+        names+=("$1")
+    done
+    cmo_wait_cluster_agreement "${#names[@]}" "${names[@]}"
+    for i in $(seq 1 30); do
+        nodes_out="$(cmo_admin cmo-cluster-0 CLUSTER NODES)"
+        if ! grep -q '\[' <<< "$nodes_out"; then
+            return 0
+        fi
+        sleep 1
+    done
+    echo "scale: slots are still marked migrating" >&2
+    return 1
+}
+
+read_keys() {
+    local phase="$1" i got ok try
+    for i in $(seq 1 "$count"); do
+        ok=0
+        got=""
+        for try in $(seq 1 20); do
+            got="$(cmo_app cmo-cluster-0 GET "cmo:scale:${i}" | tr -d '\r' || true)"
+            if [[ "$got" == "v${i}" ]]; then
+                ok=1
+                break
+            fi
+            sleep 0.5
+        done
+        if [[ "$ok" -ne 1 ]]; then
+            echo "scale: key cmo:scale:${i} is '${got}' after ${phase}" >&2
+            cmo_admin cmo-cluster-0 CLUSTER NODES >&2 || true
+            exit 1
+        fi
+    done
+}
+
+wait_stable
+
 masters="$(cmo_admin cmo-cluster-0 CLUSTER NODES | awk '$3 ~ /master/ { print }')"
 master_count="$(printf '%s\n' "$masters" | awk 'NF { c++ } END { print c+0 }')"
 [[ "$master_count" == "4" ]] || {
@@ -49,13 +96,7 @@ if [[ -n "$small" ]]; then
     exit 1
 fi
 
-for i in $(seq 1 "$count"); do
-    got="$(cmo_app cmo-cluster-0 GET "cmo:scale:${i}" | tr -d '\r')"
-    [[ "$got" == "v${i}" ]] || {
-        echo "scale: key cmo:scale:${i} is '${got}' after rebalance" >&2
-        exit 1
-    }
-done
+read_keys rebalance
 
 ./cluster-remove.sh cmo-cluster-3
 
@@ -69,12 +110,7 @@ if docker inspect cmo-cluster-3 >/dev/null 2>&1; then
     echo "scale: cmo-cluster-3 is still present" >&2
     exit 1
 fi
-for i in $(seq 1 "$count"); do
-    got="$(cmo_app cmo-cluster-0 GET "cmo:scale:${i}" | tr -d '\r')"
-    [[ "$got" == "v${i}" ]] || {
-        echo "scale: key cmo:scale:${i} is '${got}' after drain" >&2
-        exit 1
-    }
-done
+wait_stable
+read_keys drain
 
 echo "scale: ok (4th primary joined, slots spread, keys survived add and drain)"
