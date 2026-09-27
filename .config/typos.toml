@@ -20,9 +20,13 @@ nd = "nd"
 Ba = "Ba"
 Addd = "Addd"
 forkless = "forkless"
+cmo = "cmo"
+CMO = "CMO"
 
 [default.extend-identifiers]
 dbe = "dbe"
+cmo = "cmo"
+CMO = "CMO"
 
 [default]
 extend-ignore-re = [
