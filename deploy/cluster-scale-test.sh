@@ -20,7 +20,15 @@ export CMO_CLI_CLUSTER=1
 
 count="${CMO_SCALE_KEYS:-80}"
 for i in $(seq 1 "$count"); do
-    reply="$(cmo_app cmo-cluster-0 SET "cmo:scale:${i}" "v${i}" | tr -d '\r')"
+    reply=""
+    for _try in $(seq 1 30); do
+        reply="$(cmo_app cmo-cluster-0 SET "cmo:scale:${i}" "v${i}" | tr -d '\r' || true)"
+        case "$reply" in
+            OK) break ;;
+            *CLUSTERDOWN* | *TRYAGAIN* | *LOADING*) sleep 0.5 ;;
+            *) break ;;
+        esac
+    done
     [[ "$reply" == "OK" ]] || {
         echo "scale: SET cmo:scale:${i} replied '${reply}'" >&2
         exit 1

@@ -197,15 +197,28 @@ else
 fi
 cmo_wait_healthy "$container"
 if [[ "$topology" == "cluster" ]]; then
-    ok=0
+    # A simultaneous restart can leave the cluster down until every node
+    # finishes loading and clears FAIL. Require every data node to report
+    # cluster_state:ok for three checks in a row.
+    stable=0
     for _i in $(seq 1 60); do
-        if cmo_admin "$container" CLUSTER INFO | grep -q 'cluster_state:ok'; then
-            ok=1
-            break
+        good=1
+        while IFS= read -r node; do
+            if ! cmo_admin "$node" CLUSTER INFO | grep -q 'cluster_state:ok'; then
+                good=0
+            fi
+        done < <(data_nodes)
+        if [[ "$good" -eq 1 ]]; then
+            stable=$((stable + 1))
+            if [[ "$stable" -ge 3 ]]; then
+                break
+            fi
+        else
+            stable=0
         fi
         sleep 1
     done
-    [[ "$ok" -eq 1 ]] || fail "cluster did not recover after restart"
+    [[ "$stable" -ge 3 ]] || fail "cluster did not recover after restart"
 fi
 
 got="$(cmo_app "$container" GET cmo:smoke | tr -d '\r')"
