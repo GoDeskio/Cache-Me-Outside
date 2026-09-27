@@ -38,7 +38,23 @@ data:
     fi
     # shellcheck disable=SC2086
     valkey-cli --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning \
-      --cluster create $nodes --cluster-replicas "$reps" --cluster-yes
+      --cluster create $nodes --cluster-replicas "$reps" --cluster-yes || true
+    ok=0
+    tries=0
+    while [ "$tries" -lt 30 ]; do
+      info="$(valkey-cli -h "$host0" -p 6379 --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning CLUSTER INFO || true)"
+      if printf '%s\n' "$info" | grep -q 'cluster_state:ok'; then
+        ok=1
+        break
+      fi
+      tries=$((tries + 1))
+      sleep 2
+    done
+    if [ "$ok" -ne 1 ]; then
+      echo "cluster create did not reach cluster_state:ok" >&2
+      printf '%s\n' "$info" >&2
+      exit 1
+    fi
   scale.sh: |
     #!/bin/sh
     set -eu
@@ -91,5 +107,7 @@ data:
       done
       valkey-cli --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning \
         --cluster rebalance "${existing}:6379" --cluster-use-empty-primaries --cluster-yes
+      info="$(valkey-cli -h "$existing" -p 6379 --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning CLUSTER INFO || true)"
+      printf '%s\n' "$info" | grep -q 'cluster_state:ok'
     fi
 {{- end }}

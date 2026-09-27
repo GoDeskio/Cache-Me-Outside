@@ -220,6 +220,22 @@ chmod 600 "$acl_file"
 if [ "$CMO_ROLE" = "sentinel" ]; then
     : "${CMO_PRIMARY_HOST:?Set CMO_PRIMARY_HOST for a sentinel}"
     : "${CMO_PRIMARY_PORT:=6379}"
+    # Monitor the address resolved at start. A killed container drops out of
+    # Docker DNS, and Sentinel will not fail over while it is still trying to
+    # resolve that name. Replicas can still be reached by hostname.
+    if command -v getent >/dev/null 2>&1; then
+        resolved=""
+        try=0
+        while [ "$try" -lt 30 ]; do
+            resolved="$(getent hosts "$CMO_PRIMARY_HOST" | awk '{ print $1; exit }')"
+            if [ -n "$resolved" ]; then
+                CMO_PRIMARY_HOST="$resolved"
+                break
+            fi
+            try=$((try + 1))
+            sleep 1
+        done
+    fi
     umask 077
     {
         printf '%s\n' "bind ${CMO_CONTAINER_BIND}"

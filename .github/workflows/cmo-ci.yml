@@ -190,8 +190,18 @@ jobs:
             --set persistence.size=64Mi \
             --wait --timeout 240s
           pass="$(kubectl get secret cache-me-outside-auth -o jsonpath='{.data.admin-password}' | base64 -d)"
+          ready=0
+          for _i in $(seq 1 30); do
+            if kubectl exec cmo-cmo-data-0 -- valkey-cli -h 127.0.0.1 --user admin -a "$pass" --no-auth-warning CLUSTER INFO \
+                | grep -q 'cluster_state:ok'; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" -eq 1
           kubectl exec cmo-cmo-data-0 -- valkey-cli -h 127.0.0.1 --user admin -a "$pass" --no-auth-warning \
-            SET cmo:kind before
+            SET cmo:kind before | grep -qx OK
           helm upgrade cmo deploy/helm/cache-me-outside \
             --reuse-values \
             --set cluster.primaries=4 \
@@ -200,6 +210,7 @@ jobs:
             --set cluster.scaleJob.role=primary \
             --wait --timeout 300s
           masters="$(kubectl exec cmo-cmo-data-0 -- valkey-cli -h 127.0.0.1 --user admin -a "$pass" --no-auth-warning CLUSTER NODES | grep -c 'master' || true)"
+          echo "masters=${masters}"
           test "$masters" -eq 4
           kubectl exec cmo-cmo-data-0 -- valkey-cli -h 127.0.0.1 -c --user admin -a "$pass" --no-auth-warning \
-            GET cmo:kind | grep -q before
+            GET cmo:kind | grep -qx before
