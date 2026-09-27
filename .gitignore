@@ -61,6 +61,7 @@ src/unit/.flags
 valkey-unit-tests
 src/.idea/*
 
-# Cache-Me-Outside local secrets and benchmark output
+# Cache-Me-Outside local secrets, generated topology, and benchmark output
 deploy/.env
+deploy/.generated/
 deploy/results/

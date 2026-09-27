@@ -48,10 +48,82 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Build, smoke, and a short benchmark
+      - name: Build, standalone smoke, and a short benchmark
         run: |
           cd deploy
           ./smoke.sh --generate-env
           CMO_BENCH_REQUESTS=10000 CMO_BENCH_CLIENTS=10 ./bench.sh
           docker image ls cache-me-outside:local
-          docker compose down -v
+          ./down.sh
+
+      - name: Sentinel failover
+        run: |
+          cd deploy
+          CMO_REPLICAS=1 CMO_SENTINEL_DOWN_AFTER_MS=2000 CMO_SENTINEL_FAILOVER_TIMEOUT=20000 \
+            ./smoke.sh sentinel
+          ./sentinel-failover.sh --no-up
+          ./down.sh
+
+      - name: Cluster scale-out
+        run: |
+          cd deploy
+          CMO_CLUSTER_PRIMARIES=3 CMO_CLUSTER_REPLICAS=0 ./cluster-scale-test.sh
+          ./down.sh
+
+  k8s:
+    name: Helm lint and kind smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install helm, kubeconform, and kind
+        run: |
+          curl -fsSL -o /tmp/helm.tgz https://get.helm.sh/helm-v3.16.4-linux-amd64.tar.gz
+          tar -C /tmp -xzf /tmp/helm.tgz
+          sudo install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
+          curl -fsSL -o /tmp/kubeconform.tgz https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
+          tar -C /tmp -xzf /tmp/kubeconform.tgz
+          sudo install -m 0755 /tmp/kubeconform /usr/local/bin/kubeconform
+          curl -fsSL -o /tmp/kind https://kind.sigs.k8s.io/dl/v0.27.0/kind-linux-amd64
+          sudo install -m 0755 /tmp/kind /usr/local/bin/kind
+
+      - name: Lint and kubeconform
+        run: |
+          chart=deploy/helm/cache-me-outside
+          helm lint "$chart"
+          for topology in standalone sentinel cluster; do
+            helm template cmo "$chart" --set "topology=${topology}" \
+              | kubeconform -strict -summary -kubernetes-version 1.31.0
+          done
+          if helm template cmo "$chart" --set topology=standalone \
+              | grep -q 'hostPort:'; then
+            echo "default chart rendered a hostPort" >&2
+            exit 1
+          fi
+          if helm template cmo "$chart" --set topology=standalone \
+              --set hostPort.enabled=true --set hostPort.address=0.0.0.0 >/dev/null; then
+            echo "chart accepted hostPort 0.0.0.0" >&2
+            exit 1
+          fi
+
+      - name: Build image and kind smoke
+        run: |
+          docker build -t cache-me-outside:local .
+          kind create cluster --name cmo
+          kind load docker-image cache-me-outside:local --name cmo
+          kubectl create secret generic cache-me-outside-auth \
+            --from-literal=admin-user=admin \
+            --from-literal=admin-password="$(openssl rand -hex 24)" \
+            --from-literal=app-user=app \
+            --from-literal=app-password="$(openssl rand -hex 24)"
+          helm upgrade --install cmo deploy/helm/cache-me-outside \
+            --set image.pullPolicy=Never \
+            --set image.repository=cache-me-outside \
+            --set image.tag=local
+          kubectl rollout status statefulset/cmo-cmo-data --timeout=180s
+          kubectl exec cmo-cmo-data-0 -- valkey-cli -h 127.0.0.1 PING | grep -q NOAUTH
+          pass="$(kubectl get secret cache-me-outside-auth -o jsonpath='{.data.admin-password}' | base64 -d)"
+          kubectl exec cmo-cmo-data-0 -- valkey-cli -h 127.0.0.1 --user admin -a "$pass" --no-auth-warning INFO server \
+            | grep -q 'cmo_version:.*-cmo'

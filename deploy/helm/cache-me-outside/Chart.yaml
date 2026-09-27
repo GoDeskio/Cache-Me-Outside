@@ -1,0 +1,7 @@
+apiVersion: v2
+name: cache-me-outside
+description: Cache-Me-Outside (Valkey) for a later k3s home lab
+type: application
+version: 0.2.0
+appVersion: "255.255.255-cmo"
+kubeVersion: ">=1.25.0-0"

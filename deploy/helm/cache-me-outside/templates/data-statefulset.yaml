@@ -1,0 +1,109 @@
+{{- $address := .Values.hostPort.address | toString }}
+{{- if and .Values.hostPort.enabled (or (eq $address "0.0.0.0") (eq $address "::") (eq $address "*") (eq $address "") (eq $address "[::]")) }}
+{{- fail "hostPort.address must be one address. 0.0.0.0, ::, and * are refused." }}
+{{- end }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "cmo.dataPodPrefix" . }}
+  labels:
+    {{- include "cmo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: data
+spec:
+  serviceName: {{ include "cmo.headless" . }}
+  replicas: {{ include "cmo.dataReplicas" . }}
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      {{- include "cmo.selector" (merge (dict "component" "data") .) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cmo.labels" . | nindent 8 }}
+        app.kubernetes.io/component: data
+    spec:
+      serviceAccountName: {{ include "cmo.fullname" . }}
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "cmo.podSecurity" . | nindent 8 }}
+      terminationGracePeriodSeconds: 20
+      containers:
+        - name: valkey
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- include "cmo.containerSecurity" . | nindent 12 }}
+          ports:
+            - name: client
+              containerPort: 6379
+              {{- if .Values.hostPort.enabled }}
+              hostPort: {{ .Values.hostPort.clientPort }}
+              hostIP: {{ $address | quote }}
+              {{- end }}
+            - name: bus
+              containerPort: 16379
+          env:
+            {{- include "cmo.authEnv" . | nindent 12 }}
+            - name: CMO_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: CMO_HEADLESS_SERVICE
+              value: {{ include "cmo.headless" . | quote }}
+            - name: CMO_MAXMEMORY
+              value: {{ .Values.maxmemory | quote }}
+            - name: CMO_MAXMEMORY_POLICY
+              value: {{ .Values.maxmemoryPolicy | quote }}
+            - name: CMO_IO_THREADS
+              value: {{ .Values.ioThreads | quote }}
+            - name: CMO_PORT
+              value: "6379"
+            {{- if eq .Values.topology "standalone" }}
+            - name: CMO_ROLE
+              value: standalone
+            - name: CMO_CLUSTER_ENABLED
+              value: "no"
+            {{- else if eq .Values.topology "sentinel" }}
+            - name: CMO_ROLE
+              value: auto
+            - name: CMO_CLUSTER_ENABLED
+              value: "no"
+            - name: CMO_PRIMARY_HOST
+              value: {{ printf "%s-0.%s" (include "cmo.dataPodPrefix" .) (include "cmo.headless" .) | quote }}
+            - name: CMO_PRIMARY_PORT
+              value: "6379"
+            {{- else }}
+            - name: CMO_ROLE
+              value: cluster
+            - name: CMO_CLUSTER_ENABLED
+              value: "yes"
+            - name: CMO_CLUSTER_NODE_TIMEOUT
+              value: {{ .Values.cluster.nodeTimeout | quote }}
+            - name: CMO_ANNOUNCE_HOSTNAME
+              value: "$(CMO_POD_NAME).$(CMO_HEADLESS_SERVICE)"
+            {{- end }}
+          readinessProbe:
+            exec:
+              command: ["/usr/local/bin/healthcheck.sh"]
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "cmo.labels" . | nindent 10 }}
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if .Values.persistence.storageClass }}
+        storageClassName: {{ .Values.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.persistence.size }}

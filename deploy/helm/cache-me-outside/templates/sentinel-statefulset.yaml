@@ -1,0 +1,77 @@
+{{- if eq .Values.topology "sentinel" }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "cmo.fullname" . }}-sentinel
+  labels:
+    {{- include "cmo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: sentinel
+spec:
+  serviceName: {{ include "cmo.fullname" . }}-sentinel-headless
+  replicas: {{ .Values.sentinel.count }}
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      {{- include "cmo.selector" (merge (dict "component" "sentinel") .) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cmo.labels" . | nindent 8 }}
+        app.kubernetes.io/component: sentinel
+    spec:
+      serviceAccountName: {{ include "cmo.fullname" . }}
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "cmo.podSecurity" . | nindent 8 }}
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: sentinel
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- include "cmo.containerSecurity" . | nindent 12 }}
+          ports:
+            - name: sentinel
+              containerPort: 26379
+          env:
+            {{- include "cmo.authEnv" . | nindent 12 }}
+            - name: CMO_ROLE
+              value: sentinel
+            - name: CMO_PORT
+              value: "26379"
+            - name: CMO_PRIMARY_HOST
+              value: {{ printf "%s-0.%s" (include "cmo.dataPodPrefix" .) (include "cmo.headless" .) | quote }}
+            - name: CMO_PRIMARY_PORT
+              value: "6379"
+            - name: CMO_SENTINEL_QUORUM
+              value: {{ .Values.sentinel.quorum | quote }}
+            - name: CMO_SENTINEL_DOWN_AFTER_MS
+              value: {{ .Values.sentinel.downAfterMilliseconds | quote }}
+            - name: CMO_SENTINEL_FAILOVER_TIMEOUT
+              value: {{ .Values.sentinel.failoverTimeout | quote }}
+          readinessProbe:
+            exec:
+              command: ["/usr/local/bin/healthcheck.sh"]
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+          resources:
+            {{- toYaml .Values.sentinel.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cmo.fullname" . }}-sentinel-headless
+  labels:
+    {{- include "cmo.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    {{- include "cmo.selector" (merge (dict "component" "sentinel") .) | nindent 4 }}
+  ports:
+    - name: sentinel
+      port: 26379
+      targetPort: sentinel
+{{- end }}

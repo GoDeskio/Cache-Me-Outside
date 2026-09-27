@@ -1,0 +1,85 @@
+{{- if eq .Values.topology "cluster" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cmo.fullname" . }}-cluster-scripts
+  labels:
+    {{- include "cmo.labels" . | nindent 4 }}
+data:
+  init.sh: |
+    #!/bin/sh
+    set -eu
+    n="${CMO_CLUSTER_SIZE}"
+    reps="${CMO_CLUSTER_REPLICAS}"
+    i=0
+    nodes=""
+    while [ "$i" -lt "$n" ]; do
+      host="${CMO_NODE_PREFIX}-${i}.${CMO_HEADLESS_SERVICE}"
+      tries=0
+      while [ "$tries" -lt 90 ]; do
+        if valkey-cli -h "$host" -p 6379 --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning PING | grep -q PONG; then
+          break
+        fi
+        tries=$((tries + 1))
+        sleep 2
+      done
+      if [ "$tries" -eq 90 ]; then
+        echo "timed out waiting for ${host}" >&2
+        exit 1
+      fi
+      nodes="${nodes} ${host}:6379"
+      i=$((i + 1))
+    done
+    host0="${CMO_NODE_PREFIX}-0.${CMO_HEADLESS_SERVICE}"
+    info="$(valkey-cli -h "$host0" -p 6379 --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning CLUSTER INFO || true)"
+    if printf '%s\n' "$info" | grep -q 'cluster_state:ok'; then
+      echo "cluster already formed"
+      exit 0
+    fi
+    # shellcheck disable=SC2086
+    valkey-cli --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning \
+      --cluster create $nodes --cluster-replicas "$reps" --cluster-yes
+  scale.sh: |
+    #!/bin/sh
+    set -eu
+    new="${CMO_NODE_PREFIX}-${CMO_SCALE_ORDINAL}.${CMO_HEADLESS_SERVICE}"
+    existing="${CMO_NODE_PREFIX}-0.${CMO_HEADLESS_SERVICE}"
+    tries=0
+    while [ "$tries" -lt 90 ]; do
+      if valkey-cli -h "$new" -p 6379 --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning PING | grep -q PONG; then
+        break
+      fi
+      tries=$((tries + 1))
+      sleep 2
+    done
+    if [ "$tries" -eq 90 ]; then
+      echo "timed out waiting for ${new}" >&2
+      exit 1
+    fi
+    if [ "$CMO_SCALE_ROLE" = "replica" ]; then
+      primary="${CMO_NODE_PREFIX}-${CMO_SCALE_PRIMARY_ORDINAL}.${CMO_HEADLESS_SERVICE}"
+      valkey-cli -h "$existing" -p 6379 --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning CLUSTER NODES > /tmp/nodes
+      id=""
+      while read -r node_id addr flags _; do
+        case "$addr" in
+          *"$primary"*)
+            case "$flags" in
+              *master*) id="$node_id" ;;
+            esac
+            ;;
+        esac
+      done < /tmp/nodes
+      if [ -z "$id" ]; then
+        echo "could not find primary ${primary}" >&2
+        exit 1
+      fi
+      valkey-cli --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning \
+        --cluster add-node "${new}:6379" "${existing}:6379" \
+        --cluster-replica --cluster-primary-id "$id" --cluster-yes
+    else
+      valkey-cli --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning \
+        --cluster add-node "${new}:6379" "${existing}:6379" --cluster-yes
+      valkey-cli --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning \
+        --cluster rebalance "${existing}:6379" --cluster-use-empty-primaries --cluster-yes
+    fi
+{{- end }}

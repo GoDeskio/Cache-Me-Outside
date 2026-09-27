@@ -20,7 +20,19 @@ Passwords are not in the config file. The entrypoint writes `/tmp/cmo-users.acl`
 | `CMO_PORT` | `6379` | Port inside the container |
 | `CMO_MAXMEMORY` | `256mb` | `maxmemory` |
 | `CMO_MAXMEMORY_POLICY` | `allkeys-lru` | Eviction policy |
-| `CMO_CONTAINER_MEMORY` | `512m` | Docker memory limit for the container |
+| `CMO_CONTAINER_MEMORY` | `512m` | Docker memory limit. Keep it at least twice `CMO_MAXMEMORY` |
+| `CMO_CPUS` | `1.0` | Compose CPU cap |
+| `CMO_IO_THREADS` | `1` | Valkey `io-threads`. `1` is the main thread only |
+| `CMO_REPLICAS` | `2` | Sentinel data replicas, not counting the primary |
+| `CMO_SENTINELS` | `3` | Sentinel processes. Quorum is a majority unless `CMO_SENTINEL_QUORUM` is set |
+| `CMO_SENTINEL_DOWN_AFTER_MS` | `5000` | How long Sentinel waits before calling a primary down |
+| `CMO_SENTINEL_FAILOVER_TIMEOUT` | `60000` | Sentinel failover timeout |
+| `CMO_SENTINEL_MEMORY` | `128m` | Memory limit for a Sentinel container |
+| `CMO_SENTINEL_CPUS` | `0.25` | CPU cap for a Sentinel container |
+| `CMO_CLUSTER_PRIMARIES` | `3` | Initial cluster primaries. Minimum 3 |
+| `CMO_CLUSTER_REPLICAS` | `1` | Replicas per primary |
+| `CMO_CLUSTER_NODE_TIMEOUT` | `5000` | `cluster-node-timeout` |
+| `CMO_ANNOUNCE_IP` | empty | Address other hosts use. Required for `./up.sh node`. Never `0.0.0.0` |
 | `CMO_CONTAINER_BIND` | `0.0.0.0` | Address the process binds **inside** the container |
 
 `CMO_CONTAINER_BIND` is not in the example env file. It has to be an address inside the container network namespace so published ports and `proxy-net` work. It is not the host bind. Host exposure is only `CMO_BIND_ADDRESS`.

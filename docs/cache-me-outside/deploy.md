@@ -40,10 +40,14 @@ docker compose -f docker-compose.yml -f docker-compose.proxy-net.yml up -d
 
 `deploy/up.sh` does not attach `proxy-net`, so a missing network does not block a normal start. On `proxy-net` the aliases are `cache-me-outside`, `valkey`, and `redis`.
 
+## Other topologies
+
+`./up.sh` is standalone. `./up.sh sentinel` and `./up.sh cluster` render a compose file under `deploy/.generated/` (gitignored) from the counts in `.env`. `./up.sh node` is one process for a machine that will join other hosts, and it requires `CMO_ANNOUNCE_IP`. Details, including how to add and remove cluster nodes, are in [scaling](scaling.md). A later k3s install is the Helm chart in [kubernetes](kubernetes.md).
+
 ## Stop
 
 ```bash
-docker compose down
+./down.sh
 ```
 
-Add `-v` only when you mean to delete the data volume.
+That removes the standalone, sentinel, cluster, and single-node containers and their volumes. `deploy/.env` is left in place.

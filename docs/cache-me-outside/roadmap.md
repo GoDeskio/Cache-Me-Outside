@@ -14,8 +14,12 @@ These are proposals. None of them are implemented in the foundation branch. They
 
 5. **ACL denial visibility.** Turn on periodic reading of `ACL LOG` with the admin user and ship denials to the host log, so a client using `KEYS` or `FLUSHALL` shows up without enabling those commands.
 
-6. **Measured runtime tuning.** Before changing `io-threads`, active defrag, or the jemalloc background thread, run `deploy/bench.sh` against the current defaults and record the results file. Only keep a change that shows up there on this hardware.
+6. **Measured runtime tuning.** `CMO_IO_THREADS` and `CMO_CPUS` are knobs now, and the default is still one I/O thread. Before raising them, or before turning on active defrag or the jemalloc background thread, run `deploy/bench.sh` and keep the results file. Only keep a change that shows up there on this hardware.
 
-7. **A replica profile.** A second Compose profile with one replica, both ports still bound to localhost or a single LAN address, for failover practice. Not cluster mode. Cluster mode is a later step if one node's memory is no longer enough, and it would use the same host-bind check.
+7. **A replica profile.** Shipped as `./up.sh sentinel` (primary, N replicas, Sentinel) and `./up.sh cluster`. What is still open is operating that across more than one physical machine without hand-running `./up.sh node` on each host: a small inventory file that is not committed, plus a check that every announce address is reachable before `cluster-bootstrap.sh`. Not an orchestrator, and not Kubernetes autoscaling.
 
 8. **Changelog next to sync pull requests.** When the weekly upstream sync opens, add a short note of Valkey fixes we care about (persistence, ACL, protocol) so the review is not only a raw merge.
+
+9. **Backup the per-node volumes.** Sentinel and cluster each have their own volume. A proposal is one restic (or equivalent) job per volume, restoring through `valkey-check-aof` before the node is allowed to rejoin. Do not snapshot a live AOF rewrite in place without `BGREWRITEAOF` finishing first.
+
+10. **HorizontalPodAutoscaler.** Not proposed. Adding a pod does not move hash slots, and removing one drops a shard. The chart deliberately has no HPA. Scale with the cluster add/remove scripts or the scale Job.
