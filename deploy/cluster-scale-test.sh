@@ -20,10 +20,12 @@ export CMO_CLI_CLUSTER=1
 
 count="${CMO_SCALE_KEYS:-80}"
 for i in $(seq 1 "$count"); do
-    cmo_app cmo-cluster-0 SET "cmo:scale:${i}" "v${i}" >/dev/null
+    reply="$(cmo_app cmo-cluster-0 SET "cmo:scale:${i}" "v${i}" | tr -d '\r')"
+    [[ "$reply" == "OK" ]] || {
+        echo "scale: SET cmo:scale:${i} replied '${reply}'" >&2
+        exit 1
+    }
 done
-
-./cluster-add.sh primary
 
 # Slot ownership is gossiped after the reshard returns. A cluster-aware GET
 # in that window can miss a key that is already on its new primary.
@@ -49,26 +51,72 @@ wait_stable() {
     return 1
 }
 
+# Ask the node that owns the slot, on its loopback, and also through the
+# cluster-aware client. Raw mode prints a missing key as an empty line.
+owner_of() {
+    local key="$1" slot addr name
+    slot="$(cmo_admin cmo-cluster-0 CLUSTER KEYSLOT "$key" | tr -d '\r')"
+    addr="$(cmo_admin cmo-cluster-0 CLUSTER NODES | awk -v slot="$slot" '
+        $3 ~ /master/ {
+            for (i = 9; i <= NF; i++) {
+                if ($i ~ /^[0-9]+-[0-9]+$/) {
+                    split($i, r, "-")
+                    if (slot+0 >= r[1]+0 && slot+0 <= r[2]+0) { print $2; exit }
+                } else if ($i ~ /^[0-9]+$/ && $i+0 == slot+0) { print $2; exit }
+            }
+        }')"
+    name="${addr#*,}"
+    name="${name%%,*}"
+    if [[ -z "$addr" || "$name" == "$addr" ]]; then
+        echo "scale: no owner hostname for ${key} (slot ${slot}, addr '${addr}')" >&2
+        return 1
+    fi
+    printf '%s\n' "$name"
+}
+
+local_get() {
+    local container="$1" key="$2"
+    docker exec "$container" valkey-cli -h 127.0.0.1 -p "${CMO_PORT:-6379}" \
+        --user "$CMO_APP_USER" -a "$CMO_APP_PASSWORD" --no-auth-warning \
+        GET "$key" | tr -d '\r'
+}
+
 read_keys() {
-    local phase="$1" i got ok try
+    local phase="$1" i owner got client ok try
+    declare -A seen=()
     for i in $(seq 1 "$count"); do
         ok=0
         got=""
+        client=""
+        owner=""
         for try in $(seq 1 20); do
-            got="$(cmo_app cmo-cluster-0 GET "cmo:scale:${i}" | tr -d '\r' || true)"
-            if [[ "$got" == "v${i}" ]]; then
-                ok=1
-                break
+            owner="$(owner_of "cmo:scale:${i}" || true)"
+            if [[ -n "$owner" ]]; then
+                got="$(local_get "$owner" "cmo:scale:${i}" || true)"
+                client="$(cmo_app cmo-cluster-0 GET "cmo:scale:${i}" | tr -d '\r' || true)"
+                if [[ "$got" == "v${i}" && "$client" == "v${i}" ]]; then
+                    ok=1
+                    break
+                fi
             fi
             sleep 0.5
         done
         if [[ "$ok" -ne 1 ]]; then
-            echo "scale: key cmo:scale:${i} is '${got}' after ${phase}" >&2
+            echo "scale: key cmo:scale:${i} owner=${owner:-none} local='${got}' client='${client}' after ${phase}" >&2
             cmo_admin cmo-cluster-0 CLUSTER NODES >&2 || true
             exit 1
         fi
+        seen["$owner"]=1
     done
+    if [[ "$phase" == "rebalance" && "${#seen[@]}" -lt 4 ]]; then
+        echo "scale: keys reached ${#seen[@]} primaries after rebalance, expected 4" >&2
+        exit 1
+    fi
 }
+
+wait_stable
+read_keys written
+./cluster-add.sh primary
 
 wait_stable
 
