@@ -49,7 +49,8 @@ if [[ "$topology" == "node" ]]; then
         exit 1
     fi
     cmo_refuse_wildcard_bind "${CMO_ANNOUNCE_IP}" CMO_ANNOUNCE_IP
-    exec cmo_dc -f docker-compose.node.yml up -d --build --wait "$@"
+    cmo_dc -f docker-compose.node.yml up -d --build --wait "$@"
+    exit
 fi
 
 if [[ "$topology" == "sentinel" || "$topology" == "cluster" ]]; then
@@ -61,4 +62,4 @@ if [[ "$topology" == "sentinel" || "$topology" == "cluster" ]]; then
     exit 0
 fi
 
-exec cmo_dc -f docker-compose.yml up -d --build --wait "$@"
+cmo_dc -f docker-compose.yml up -d --build --wait "$@"
