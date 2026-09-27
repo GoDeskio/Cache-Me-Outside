@@ -5,3 +5,5 @@ formatter:
 
 exclude:
   - "deps/"
+  # Helm templates are Go text, not YAML documents.
+  - "deploy/helm/cache-me-outside/templates/"
