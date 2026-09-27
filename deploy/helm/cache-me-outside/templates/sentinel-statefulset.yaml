@@ -23,7 +23,8 @@ spec:
       automountServiceAccountToken: false
       securityContext:
         {{- include "cmo.podSecurity" . | nindent 8 }}
-      terminationGracePeriodSeconds: 10
+      terminationGracePeriodSeconds: {{ .Values.gracefulShutdown.terminationGracePeriodSeconds }}
+      {{- include "cmo.spread" (merge (dict "component" "sentinel") .) | nindent 6 }}
       containers:
         - name: sentinel
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -49,13 +50,8 @@ spec:
               value: {{ .Values.sentinel.downAfterMilliseconds | quote }}
             - name: CMO_SENTINEL_FAILOVER_TIMEOUT
               value: {{ .Values.sentinel.failoverTimeout | quote }}
-          readinessProbe:
-            exec:
-              command: ["/usr/local/bin/healthcheck.sh"]
-            initialDelaySeconds: 3
-            periodSeconds: 5
-            timeoutSeconds: 3
-            failureThreshold: 12
+          {{- include "cmo.probes" . | nindent 10 }}
+          {{- include "cmo.preStop" (merge (dict "shutdownMode" "NOSAVE") .) | nindent 10 }}
           resources:
             {{- toYaml .Values.sentinel.resources | nindent 12 }}
 ---

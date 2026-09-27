@@ -92,8 +92,7 @@ nodes+=("${name} ${role} ${of} ${port} ${bind}")
 # Keep the membership just written. A caller may still have CMO_RESET_TOPOLOGY=1
 # from the initial ./up.sh cluster.
 CMO_RESET_TOPOLOGY=0 ./render-topology.sh cluster
-docker compose --project-directory "$(pwd)" -p cache-me-outside \
-    -f .generated/compose.yml up -d --no-build --wait "$name"
+cmo_dc -f .generated/compose.yml up -d --no-build --wait "$name"
 cmo_wait_healthy "$name"
 
 agree_names=()

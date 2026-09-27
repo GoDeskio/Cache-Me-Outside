@@ -20,7 +20,8 @@ services:
     container_name: cmo-node
     hostname: cmo-node
     env_file:
-      - .env
+      - path: ${CMO_ENV_FILE:-.env}
+        required: false
     environment:
       CMO_ROLE: ${CMO_ROLE:-cluster}
       CMO_CLUSTER_ENABLED: ${CMO_CLUSTER_ENABLED:-yes}

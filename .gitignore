@@ -65,3 +65,4 @@ src/.idea/*
 deploy/.env
 deploy/.generated/
 deploy/results/
+dist/

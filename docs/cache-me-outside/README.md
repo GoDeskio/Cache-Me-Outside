@@ -13,6 +13,8 @@ Valkey and the Redis code it inherited stay under the BSD 3-Clause License. See 
 - [Config](config.md)
 - [Scaling](scaling.md)
 - [Kubernetes](kubernetes.md)
+- [Virtual machines](virtual-machines.md)
+- [Deployment targets](targets.md)
 - [Security defaults](security.md)
 - [Benchmarking](benchmarking.md)
 - [Upstream sync](upstream-sync.md)
@@ -20,4 +22,4 @@ Valkey and the Redis code it inherited stay under the BSD 3-Clause License. See 
 
 ## What this fork changes
 
-The fork is additive. New files live under `deploy/`, `docs/cache-me-outside/`, and `.github/workflows/cmo-ci.yml`. The server change is the `cmo_version` field in `src/server.c` and `src/cmo_version.h`. Binaries stay `valkey-server`, `valkey-cli`, and `valkey-benchmark`. `make install` still creates the `redis-*` symlinks. Standalone, Sentinel, and cluster layouts are selected with `deploy/up.sh` and do not rename those binaries.
+The fork is additive. New files live under `deploy/`, `packaging/`, `docs/cache-me-outside/`, and `.github/workflows/cmo-ci.yml`. The server change is the `cmo_version` field in `src/server.c` and `src/cmo_version.h`. Binaries stay `valkey-server`, `valkey-cli`, and `valkey-benchmark`. `make install` still creates the `redis-*` symlinks. Standalone, Sentinel, and cluster layouts are selected with `deploy/up.sh` and do not rename those binaries. A `.deb` and a Helm chart install the same binaries on a VM or a Kubernetes cluster.

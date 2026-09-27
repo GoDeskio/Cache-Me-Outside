@@ -7,17 +7,57 @@ cmo_deploy_dir() {
     pwd
 }
 
-cmo_load_env() {
+# Absolute path, or a path relative to deploy/. Override with CMO_ENV_FILE
+# when the file lives outside the repo (a vault directory, for example).
+cmo_env_path() {
     local dir
     dir="$(cmo_deploy_dir)"
-    if [[ ! -f "$dir/.env" ]]; then
-        echo "Missing deploy/.env." >&2
-        echo "Copy cache-me-outside.env.example to .env, replace both passwords, and chmod 600 .env." >&2
+    if [[ -n "${CMO_ENV_FILE:-}" ]]; then
+        case "$CMO_ENV_FILE" in
+            /*) printf '%s\n' "$CMO_ENV_FILE" ;;
+            *) printf '%s\n' "${dir}/${CMO_ENV_FILE}" ;;
+        esac
+    else
+        printf '%s\n' "${dir}/.env"
+    fi
+}
+
+# Compose interpolation uses --env-file. The service env_file is separate and
+# may be required: false so a missing path does not abort `compose config`.
+cmo_dc() {
+    local dir path args
+    dir="$(cmo_deploy_dir)"
+    path="$(cmo_env_path)"
+    args=(docker compose --project-directory "$dir" -p cache-me-outside)
+    if [[ -f "$path" ]]; then
+        args+=(--env-file "$path")
+    fi
+    "${args[@]}" "$@"
+}
+
+cmo_refuse_generic_alias() {
+    local alias_name="${1:-}"
+    case "$alias_name" in
+        redis | valkey | REDIS | VALKEY)
+            echo "Refusing network alias '${alias_name}'." >&2
+            echo "That name collides with other stacks. Use a project-specific alias (default cache-me-outside)." >&2
+            exit 1
+            ;;
+    esac
+}
+
+cmo_load_env() {
+    local env_file
+    env_file="$(cmo_env_path)"
+    if [[ ! -f "$env_file" ]]; then
+        echo "Missing ${env_file}." >&2
+        echo "Copy cache-me-outside.env.example to deploy/.env, or set CMO_ENV_FILE to a file outside the repo." >&2
+        echo "Replace both passwords and chmod 600 the file." >&2
         exit 1
     fi
     set -a
-    # shellcheck disable=SC1091
-    source "$dir/.env"
+    # shellcheck disable=SC1090
+    source "$env_file"
     set +a
     : "${CMO_ADMIN_USER:=admin}"
     : "${CMO_APP_USER:=app}"
@@ -174,14 +214,13 @@ cmo_generated_dir() {
 }
 
 cmo_compose() {
-    local dir gen
-    dir="$(cmo_deploy_dir)"
+    local gen
     gen="$(cmo_generated_dir)/compose.yml"
     if [[ -f "$gen" && "${CMO_TOPOLOGY:-standalone}" != "standalone" && "${CMO_TOPOLOGY:-}" != "node" ]]; then
-        docker compose --project-directory "$dir" -p cache-me-outside -f "$gen" "$@"
+        cmo_dc -f "$gen" "$@"
     elif [[ "${CMO_TOPOLOGY:-standalone}" == "node" ]]; then
-        docker compose --project-directory "$dir" -p cache-me-outside -f "$dir/docker-compose.node.yml" "$@"
+        cmo_dc -f "$(cmo_deploy_dir)/docker-compose.node.yml" "$@"
     else
-        docker compose --project-directory "$dir" -p cache-me-outside -f "$dir/docker-compose.yml" "$@"
+        cmo_dc -f "$(cmo_deploy_dir)/docker-compose.yml" "$@"
     fi
 }

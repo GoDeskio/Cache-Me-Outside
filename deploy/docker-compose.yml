@@ -17,7 +17,8 @@ services:
     image: cache-me-outside:local
     container_name: cache-me-outside
     env_file:
-      - .env
+      - path: ${CMO_ENV_FILE:-.env}
+        required: false
     environment:
       CMO_ROLE: standalone
       CMO_MAXMEMORY: ${CMO_MAXMEMORY:-256mb}

@@ -79,6 +79,16 @@ data:
     else
       valkey-cli --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning \
         --cluster add-node "${new}:6379" "${existing}:6379" --cluster-yes
+      tries=0
+      while [ "$tries" -lt 40 ]; do
+        if valkey-cli -h "$existing" -p 6379 --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning CLUSTER NODES | grep -q "$new"; then
+          if valkey-cli -h "$new" -p 6379 --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning CLUSTER INFO | grep -q 'cluster_state:ok'; then
+            break
+          fi
+        fi
+        tries=$((tries + 1))
+        sleep 1
+      done
       valkey-cli --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning \
         --cluster rebalance "${existing}:6379" --cluster-use-empty-primaries --cluster-yes
     fi

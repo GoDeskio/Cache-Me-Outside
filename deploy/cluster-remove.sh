@@ -133,7 +133,6 @@ cmo_cluster_mgr "$keeper" del-node "${keeper}:6379" "$node_id" --cluster-yes
 # Keep the membership just written. A caller may still have CMO_RESET_TOPOLOGY=1
 # from the initial ./up.sh cluster.
 CMO_RESET_TOPOLOGY=0 ./render-topology.sh cluster
-docker compose --project-directory "$(pwd)" -p cache-me-outside \
-    -f .generated/compose.yml up -d --no-build --remove-orphans
+cmo_dc -f .generated/compose.yml up -d --no-build --remove-orphans
 docker volume rm "${name}-data" >/dev/null 2>&1 || true
 echo "removed ${name}"

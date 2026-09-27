@@ -1,0 +1,5 @@
+- name: Provision Cache-Me-Outside nodes
+  hosts: cmo
+  become: true
+  roles:
+    - cache-me-outside

@@ -33,7 +33,7 @@ Changing `CMO_CONTAINER_MEMORY`, `CMO_CPUS`, or `CMO_IO_THREADS` applies on the 
 ./scale-memory.sh 384mb cmo-cluster-0  # one node
 ```
 
-The helper uses the admin user (`CONFIG SET maxmemory`). It also writes `CMO_MAXMEMORY` in `deploy/.env` so the next recreate does not snap back. A `docker restart` of an existing container keeps the environment from when that container was created; recreate with `./up.sh` to pick up the file.
+The helper uses the admin user (`CONFIG SET maxmemory`). It also writes `CMO_MAXMEMORY` in the env file (`CMO_ENV_FILE` or `deploy/.env`) so the next recreate does not snap back. A `docker restart` of an existing container keeps the environment from when that container was created; recreate with `./up.sh` to pick up the file.
 
 Sentinel containers are not data nodes. The helper will not target them.
 
@@ -121,7 +121,9 @@ CMO_CLUSTER_REPLICAS=1 \
   ./cluster-bootstrap.sh
 ```
 
-Those addresses are announce addresses, not container DNS names. The same admin password has to be in each machine's `.env`. Sentinel across machines is the same node file with `CMO_ROLE=primary` on one host, `CMO_ROLE=replica` and `CMO_PRIMARY_HOST=<announce address of the primary>` on the others, and `CMO_ROLE=sentinel` on three hosts. `CMO_ANNOUNCE_IP` is what replicas and sentinels publish so they are not advertising a Docker bridge address that the other machine cannot route to.
+Those addresses are announce addresses, not container DNS names. The same admin password has to be in each machine's env file. `CMO_ENV_FILE` can point at a path outside the repo. Sentinel across machines is the same node file with `CMO_ROLE=primary` on one host, `CMO_ROLE=replica` and `CMO_PRIMARY_HOST=<announce address of the primary>` on the others, and `CMO_ROLE=sentinel` on three hosts. `CMO_ANNOUNCE_IP` is what replicas and sentinels publish so they are not advertising a Docker bridge address that the other machine cannot route to.
+
+A VM installed from the `.deb` uses the same announce variables. The process binds `CMO_BIND_ADDRESS` (and loopback), not `0.0.0.0`. A Kubernetes pod uses in-cluster DNS unless `cluster.announce.mode` is `ip` and `hostPort` is enabled. Those three can be members of one cluster when each announce address is routable from the others. See [virtual machines](virtual-machines.md).
 
 `CMO_ATTACH_PROXY_NET=1` on a single-host render also attaches the external network `proxy-net`. Create that network first. `./up.sh` does not attach it unless the variable is set, so a missing network does not block startup.
 

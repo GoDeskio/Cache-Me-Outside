@@ -1,6 +1,6 @@
 # Kubernetes
 
-`deploy/helm/cache-me-outside` is a small chart for a later k3s cluster. It is not wired to a real cluster in this repo. CI renders it with `helm lint` and kubeconform, and a kind cluster runs the standalone topology far enough to require `AUTH` and to see `cmo_version`.
+`deploy/helm/cache-me-outside` runs on any cluster that can install a Helm chart: k3s, kind, or a managed Kubernetes service. It does not depend on one distribution. CI renders it with `helm lint` and kubeconform, and a kind cluster runs the standalone topology and a cluster-mode scale-out (3 primaries, add a 4th, read the key back).
 
 ## Install
 
@@ -21,17 +21,33 @@ helm upgrade --install cmo deploy/helm/cache-me-outside \
 
 What you get:
 
-- A StatefulSet of data pods, each with its own PVC (`persistence.size`, default `1Gi`)
-- A headless Service so pod DNS is stable (`<pod>.<release>-cmo-data-headless`)
+- A StatefulSet of data pods, each with its own PVC (`persistence.size`, default `1Gi`). `persistence.storageClass` is empty by default, which uses the cluster's default StorageClass. Set it when k3s, kind, or a managed cluster should use a different class. `persistence.accessMode` defaults to `ReadWriteOnce`
+- A headless Service so pod DNS is stable (`<pod>.<release>-cmo-data-headless`). Service names come from the release. There is no Service named `redis` or `valkey`
 - A PodDisruptionBudget (`maxUnavailable: 1`)
 - Resource requests and limits from `values.yaml`
+- Readiness and liveness probes that run the image health check
+- A `preStop` hook that runs `SHUTDOWN SAVE` on data pods and `SHUTDOWN NOSAVE` on Sentinel, then a termination grace period (default 30 seconds)
+- Preferred pod anti-affinity and topology spread on `kubernetes.io/hostname`, with `ScheduleAnyway`, so a one-node cluster can still place every pod and a multi-node cluster separates shards and replicas
+- A NetworkPolicy that allows ingress from this release and from pods labeled `cache-me-outside.io/client=true`, and egress to those pods plus DNS. Set `networkPolicy.enabled` to `false` if the cluster does not enforce NetworkPolicy
 - The same image entrypoint as Docker: ACL from the Secret, AOF and RDB on the volume, `maxmemory` and `io-threads` from values
 - For `cluster`, a post-install Job that runs `valkey-cli --cluster create` once the pods answer `PING`, and skips that if `cluster_state` is already `ok`
 - For `sentinel`, pod 0 is the initial primary (`CMO_ROLE=auto`), the other data pods replicaof it, and a second StatefulSet runs Sentinel
 
-Pods run as uid 999 with privilege escalation off and a dropped capability set. `hostPort` is off. Setting `hostPort.enabled=true` with address `0.0.0.0`, `::`, or `*` fails the render. Inside one k3s cluster the pods reach each other through DNS, so host ports are unnecessary. `cluster-announce-hostname` is `<pod>.<headless service>`.
+Pods run as uid 999 with privilege escalation off and a dropped capability set. `hostPort` is off. Setting `hostPort.enabled=true` with address `0.0.0.0`, `::`, or `*` fails the render. Inside one cluster the pods reach each other through DNS, so host ports are unnecessary. `cluster.announce.mode` defaults to `hostname`, and `cluster-announce-hostname` is `<pod>.<headless service>`.
+
+`cluster.announce.mode=ip` is for a pod that must be reachable from a VM or a container outside this cluster. It requires `hostPort.enabled=true` and announces `status.hostIP` plus the published client and bus ports. The render fails if you ask for ip announce without a host port. The pod IP is not treated as a routable address.
 
 There is no host LAN address in the chart.
+
+## Metrics
+
+`metrics.exporter.enabled` adds an `oliver006/redis_exporter` sidecar that scrapes the admin user on localhost. The app user cannot run `INFO`, so the exporter does not use it. `metrics.serviceMonitor.enabled` emits a `ServiceMonitor` for a Prometheus operator. Both default to off. kubeconform skips `ServiceMonitor` because that CRD is not in the stock Kubernetes schema. Leave the exporter off until you have a place to scrape port 9121.
+
+## Rolling upgrade
+
+`helm upgrade` with a new image tag rolls the StatefulSet one pod at a time (the default rolling strategy, highest ordinal first). Data pods run `SHUTDOWN SAVE` in `preStop` before the process is killed, so the volume has a fresh snapshot if the pod then comes back. A cluster primary with no replica is unavailable for its slots until that pod is ready again. Give those primaries a replica before you roll them if the working set cannot tolerate that gap. Sentinel pods shut down without `SAVE`.
+
+After the roll, a cluster should still report `cluster_state:ok`. You do not re-run `cluster create`. A failed pod keeps its PVC, so the AOF is still there when it starts.
 
 ## Scale
 

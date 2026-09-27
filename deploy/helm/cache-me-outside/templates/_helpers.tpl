@@ -77,3 +77,57 @@ readOnlyRootFilesystem: false
 capabilities:
   drop: ["ALL"]
 {{- end -}}
+
+{{- define "cmo.spread" -}}
+{{- if .Values.scheduling.spread }}
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          topologyKey: kubernetes.io/hostname
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "cmo.name" . }}
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: {{ .component }}
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: {{ include "cmo.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: {{ .component }}
+{{- end }}
+{{- end -}}
+
+{{- define "cmo.probes" -}}
+readinessProbe:
+  exec:
+    command: ["/usr/local/bin/healthcheck.sh"]
+  initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+  periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+  timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+  failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+livenessProbe:
+  exec:
+    command: ["/usr/local/bin/healthcheck.sh"]
+  initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+  periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+  timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+  failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+{{- end -}}
+
+{{- define "cmo.preStop" -}}
+{{- if .Values.gracefulShutdown.enabled }}
+lifecycle:
+  preStop:
+    exec:
+      command:
+        - /bin/sh
+        - -c
+        - 'valkey-cli -h 127.0.0.1 -p "$CMO_PORT" --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning SHUTDOWN {{ .shutdownMode }}'
+{{- end }}
+{{- end -}}

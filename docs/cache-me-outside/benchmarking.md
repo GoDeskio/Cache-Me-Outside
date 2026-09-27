@@ -1,8 +1,8 @@
 # Benchmarking
 
-`deploy/bench.sh` runs `valkey-benchmark` against the Compose container and against a stock `valkey/valkey` container, then writes `deploy/results/bench-<utc>.txt`. That directory is gitignored.
+`deploy/bench.sh` runs `valkey-benchmark` against the Compose container and against a stock `valkey/valkey` container, then writes `bench-<utc>.txt`. The default directory is `deploy/results`, which is gitignored. Set `CMO_BENCH_OUT_DIR` to put the file somewhere else (an absolute path, or a path relative to `deploy/`).
 
-The cache must already be up (`./up.sh` or `./smoke.sh`). The script reads `deploy/.env` for the app password and does not print it.
+The cache must already be up (`./up.sh` or `./smoke.sh`). The script reads `CMO_ENV_FILE` or `deploy/.env` and does not print passwords.
 
 ```bash
 cd deploy
@@ -15,9 +15,9 @@ Defaults are 100000 requests, 20 clients, 64-byte values, `SET` and `GET`. Overr
 CMO_BENCH_REQUESTS=20000 CMO_BENCH_CLIENTS=10 ./bench.sh
 ```
 
-The script authenticates to Cache-Me-Outside as the app user. The stock container is started with `--requirepass` set to that same app password, the same `maxmemory` and eviction policy, and with AOF and RDB turned off. Cache-Me-Outside keeps its normal AOF and RDB settings, so the numbers include that durability cost. Each `valkey-benchmark` process runs inside the container it measures, against `127.0.0.1`, so the Docker network is not part of the timing. The results file says so.
+The script authenticates to Cache-Me-Outside as the app user. The stock container uses `--requirepass` with that same password on the default user, the same `maxmemory` and eviction policy, and the same AOF everysec and RDB save rules. The ACL is not the same: the stock default user can run every command, including `CONFIG`, and the app user cannot. The results file records `save`, `appendonly`, and `appendfsync` for both, fetched with the admin user on Cache-Me-Outside and with the default user on stock. Each `valkey-benchmark` process runs inside the container it measures, against `127.0.0.1`, so the Docker network is not part of the timing.
 
-`valkey-benchmark` may print `Could not fetch server CONFIG` against Cache-Me-Outside. That is the app user being denied `CONFIG`. The SET and GET tests still run.
+`valkey-benchmark` tries `CONFIG GET` before the test. Against the app user that call is denied. The script drops the single warning line `Could not fetch server CONFIG` and keeps the admin-fetched values in the header. Set `CMO_BENCH_USER=admin` when you want the benchmark client itself to be a user that can `CONFIG`.
 
 ## Upstream image tag
 

@@ -1,0 +1,42 @@
+- name: Refuse wildcard bind and announce addresses
+  ansible.builtin.assert:
+    that:
+      - cmo_bind_address not in ["0.0.0.0", "::", "*", ""]
+      - cmo_announce_ip not in ["0.0.0.0", "::", "*"]
+    fail_msg: Bind and announce addresses must be one reachable address, never 0.0.0.0.
+
+- name: Refuse placeholder passwords
+  ansible.builtin.assert:
+    that:
+      - cmo_admin_password is defined
+      - cmo_app_password is defined
+      - "'replace-with' not in cmo_admin_password"
+      - "'replace-with' not in cmo_app_password"
+      - cmo_admin_password != cmo_app_password
+    fail_msg: Set cmo_admin_password and cmo_app_password to different non-placeholder values.
+
+- name: Install the package from a built .deb
+  ansible.builtin.apt:
+    deb: "{{ cmo_deb_path }}"
+  when: cmo_deb_path | length > 0
+
+- name: Require the valkey system user from the package
+  ansible.builtin.getent:
+    database: passwd
+    key: valkey
+
+- name: Install environment file
+  ansible.builtin.template:
+    src: environment.j2
+    dest: "{{ cmo_environment_file }}"
+    owner: root
+    group: valkey
+    mode: "0640"
+  notify: Restart cache-me-outside
+
+- name: Enable the unit
+  ansible.builtin.systemd:
+    name: "{{ cmo_service }}"
+    enabled: true
+    state: started
+    daemon_reload: true

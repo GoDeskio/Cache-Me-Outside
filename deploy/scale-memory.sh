@@ -106,9 +106,10 @@ fi
 
 # One shared env file. Update it when the call covered every targeted node,
 # including a single explicit container, so the next recreate does not revert.
-if grep -q '^CMO_MAXMEMORY=' .env; then
-    sed -i "s/^CMO_MAXMEMORY=.*/CMO_MAXMEMORY=${new_raw}/" .env
+env_path="$(cmo_env_path)"
+if grep -q '^CMO_MAXMEMORY=' "$env_path"; then
+    sed -i "s/^CMO_MAXMEMORY=.*/CMO_MAXMEMORY=${new_raw}/" "$env_path"
 else
-    echo "CMO_MAXMEMORY=${new_raw}" >> .env
+    echo "CMO_MAXMEMORY=${new_raw}" >> "$env_path"
 fi
-echo "Updated deploy/.env CMO_MAXMEMORY=${new_raw}. Recreate containers to keep it across a new process."
+echo "Updated ${env_path} CMO_MAXMEMORY=${new_raw}. Recreate containers to keep it across a new process."

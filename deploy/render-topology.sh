@@ -137,7 +137,8 @@ compose="$gen_dir/compose.yml"
     container_name: ${name}
     hostname: ${name}
     env_file:
-      - .env
+      - path: \${CMO_ENV_FILE:-.env}
+        required: false
     environment:
       CMO_ROLE: ${runtime_role}
       CMO_PORT: "6379"
@@ -210,7 +211,8 @@ YAML
     container_name: cmo-sentinel-${i}
     hostname: cmo-sentinel-${i}
     env_file:
-      - .env
+      - path: \${CMO_ENV_FILE:-.env}
+        required: false
     environment:
       CMO_ROLE: sentinel
       CMO_PORT: "${CMO_SENTINEL_PORT}"

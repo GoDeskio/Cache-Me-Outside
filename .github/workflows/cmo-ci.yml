@@ -70,10 +70,36 @@ jobs:
           CMO_CLUSTER_PRIMARIES=3 CMO_CLUSTER_REPLICAS=0 ./cluster-scale-test.sh
           ./down.sh
 
+  package:
+    name: Debian package smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Build and smoke inside Debian 12
+        run: |
+          # Compile in Bookworm so the binary does not need a newer glibc than the VM.
+          docker run --rm -v "$PWD:/src" -w /src debian:bookworm bash -lc '
+            set -eu
+            apt-get update
+            apt-get install -y build-essential pkg-config python3 adduser ca-certificates iproute2
+            make -C src distclean || true
+            make -j"$(nproc)"
+            ./packaging/build-deb.sh
+            deb="$(basename "$(ls dist/cache-me-outside_*.deb)")"
+            dpkg -i "dist/${deb}"
+            CMO_SMOKE_RESET_ENV=1 /usr/lib/cache-me-outside/smoke-native.sh
+            grep -q "^User=valkey" /lib/systemd/system/cache-me-outside.service
+            grep -q "^ProtectSystem=strict" /lib/systemd/system/cache-me-outside.service
+            grep -q "ExecStop=/usr/lib/cache-me-outside/cmo-shutdown" /lib/systemd/system/cache-me-outside.service
+          '
+
   k8s:
     name: Helm lint and kind smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -107,6 +133,23 @@ jobs:
             echo "chart accepted hostPort 0.0.0.0" >&2
             exit 1
           fi
+          if helm template cmo "$chart" --set topology=cluster \
+              --set cluster.announce.mode=ip >/dev/null; then
+            echo "chart accepted announce ip without hostPort" >&2
+            exit 1
+          fi
+          helm template cmo "$chart" \
+            --set metrics.exporter.enabled=true \
+            --set metrics.serviceMonitor.enabled=true \
+            | kubeconform -strict -summary -kubernetes-version 1.31.0 -skip ServiceMonitor
+          if helm template cmo "$chart" | grep -Eq '^  name: (redis|valkey)$'; then
+            echo "chart rendered a generic redis or valkey Service name" >&2
+            exit 1
+          fi
+          if grep -Eq '^[[:space:]]+- (redis|valkey)$' deploy/docker-compose.proxy-net.yml; then
+            echo "proxy-net still advertises a generic alias" >&2
+            exit 1
+          fi
 
       - name: Build image and kind smoke
         run: |
@@ -127,3 +170,36 @@ jobs:
           pass="$(kubectl get secret cache-me-outside-auth -o jsonpath='{.data.admin-password}' | base64 -d)"
           kubectl exec cmo-cmo-data-0 -- valkey-cli -h 127.0.0.1 --user admin -a "$pass" --no-auth-warning INFO server \
             | grep -q 'cmo_version:.*-cmo'
+
+      - name: Kind cluster scale-out
+        run: |
+          helm uninstall cmo --wait || true
+          kubectl delete pvc -l app.kubernetes.io/instance=cmo --wait=true || true
+          helm upgrade --install cmo deploy/helm/cache-me-outside \
+            --set image.pullPolicy=Never \
+            --set image.repository=cache-me-outside \
+            --set image.tag=local \
+            --set topology=cluster \
+            --set cluster.primaries=3 \
+            --set cluster.replicasPerPrimary=0 \
+            --set resources.requests.memory=128Mi \
+            --set resources.limits.memory=256Mi \
+            --set resources.requests.cpu=50m \
+            --set resources.limits.cpu=500m \
+            --set maxmemory=64mb \
+            --set persistence.size=64Mi \
+            --wait --timeout 240s
+          pass="$(kubectl get secret cache-me-outside-auth -o jsonpath='{.data.admin-password}' | base64 -d)"
+          kubectl exec cmo-cmo-data-0 -- valkey-cli -h 127.0.0.1 --user admin -a "$pass" --no-auth-warning \
+            SET cmo:kind before
+          helm upgrade cmo deploy/helm/cache-me-outside \
+            --reuse-values \
+            --set cluster.primaries=4 \
+            --set cluster.scaleJob.enabled=true \
+            --set cluster.scaleJob.ordinal=3 \
+            --set cluster.scaleJob.role=primary \
+            --wait --timeout 300s
+          masters="$(kubectl exec cmo-cmo-data-0 -- valkey-cli -h 127.0.0.1 --user admin -a "$pass" --no-auth-warning CLUSTER NODES | grep -c 'master' || true)"
+          test "$masters" -eq 4
+          kubectl exec cmo-cmo-data-0 -- valkey-cli -h 127.0.0.1 -c --user admin -a "$pass" --no-auth-warning \
+            GET cmo:kind | grep -q before

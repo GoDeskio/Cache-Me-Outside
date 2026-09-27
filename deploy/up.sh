@@ -22,6 +22,7 @@ export CMO_TOPOLOGY="$topology"
 
 cmo_load_env
 cmo_refuse_wildcard_bind "${CMO_BIND_ADDRESS}" CMO_BIND_ADDRESS
+cmo_refuse_generic_alias "${CMO_NETWORK_ALIAS:-cache-me-outside}"
 
 host_port="${CMO_HOST_PORT}"
 case "$host_port" in
@@ -48,19 +49,16 @@ if [[ "$topology" == "node" ]]; then
         exit 1
     fi
     cmo_refuse_wildcard_bind "${CMO_ANNOUNCE_IP}" CMO_ANNOUNCE_IP
-    exec docker compose --project-directory "$(pwd)" -p cache-me-outside \
-        -f docker-compose.node.yml up -d --build --wait "$@"
+    exec cmo_dc -f docker-compose.node.yml up -d --build --wait "$@"
 fi
 
 if [[ "$topology" == "sentinel" || "$topology" == "cluster" ]]; then
     ./render-topology.sh "$topology"
-    docker compose --project-directory "$(pwd)" -p cache-me-outside \
-        -f .generated/compose.yml up -d --build --wait "$@"
+    cmo_dc -f .generated/compose.yml up -d --build --wait "$@"
     if [[ "$topology" == "cluster" ]]; then
         ./cluster-bootstrap.sh
     fi
     exit 0
 fi
 
-exec docker compose --project-directory "$(pwd)" -p cache-me-outside \
-    -f docker-compose.yml up -d --build --wait "$@"
+exec cmo_dc -f docker-compose.yml up -d --build --wait "$@"

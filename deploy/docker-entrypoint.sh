@@ -16,10 +16,15 @@ case "${1:-}" in
         ;;
 esac
 
+# Docker keeps data on the volume and writes the ACL under /tmp.
+# The VM unit sets both to /var/lib and /run before it execs this script.
+: "${CMO_DATA_DIR:=/data}"
+: "${CMO_RUNTIME_DIR:=/tmp}"
+
 if [ "$(id -u)" = "0" ]; then
-    mkdir -p /data
-    chown valkey:valkey /data
-    chmod 750 /data
+    mkdir -p "$CMO_DATA_DIR"
+    chown valkey:valkey "$CMO_DATA_DIR"
+    chmod 750 "$CMO_DATA_DIR"
     exec gosu valkey "$0" "$@"
 fi
 
@@ -203,12 +208,14 @@ if [ "$CMO_ROLE" = "sentinel" ]; then
 else
     app_acl="+@all -@dangerous -@admin -flushall -flushdb -debug -config -keys -shutdown -module -acl -replicaof -slaveof -migrate -restore -sort -failover -bgsave -bgrewriteaof -save -monitor -sync -psync"
 fi
-cat > /tmp/cmo-users.acl <<EOF
+mkdir -p "$CMO_DATA_DIR" "$CMO_RUNTIME_DIR"
+acl_file="${CMO_RUNTIME_DIR}/cmo-users.acl"
+cat > "$acl_file" <<EOF
 user default reset
 user ${CMO_ADMIN_USER} on >${CMO_ADMIN_PASSWORD} ~* &* +@all
 user ${CMO_APP_USER} on >${CMO_APP_PASSWORD} ~* &* ${app_acl}
 EOF
-chmod 600 /tmp/cmo-users.acl
+chmod 600 "$acl_file"
 
 if [ "$CMO_ROLE" = "sentinel" ]; then
     : "${CMO_PRIMARY_HOST:?Set CMO_PRIMARY_HOST for a sentinel}"
@@ -221,8 +228,8 @@ if [ "$CMO_ROLE" = "sentinel" ]; then
         printf '%s\n' "daemonize no"
         printf '%s\n' "supervised no"
         printf '%s\n' "logfile \"\""
-        printf '%s\n' "dir /tmp"
-        printf '%s\n' "aclfile /tmp/cmo-users.acl"
+        printf '%s\n' "dir ${CMO_RUNTIME_DIR}"
+        printf '%s\n' "aclfile ${acl_file}"
         printf '%s\n' "sentinel monitor ${CMO_SENTINEL_MASTER} ${CMO_PRIMARY_HOST} ${CMO_PRIMARY_PORT} ${CMO_SENTINEL_QUORUM}"
         printf '%s\n' "sentinel auth-user ${CMO_SENTINEL_MASTER} ${CMO_ADMIN_USER}"
         printf '%s\n' "sentinel auth-pass ${CMO_SENTINEL_MASTER} ${CMO_ADMIN_PASSWORD}"
@@ -237,9 +244,9 @@ if [ "$CMO_ROLE" = "sentinel" ]; then
             printf '%s\n' "sentinel announce-ip ${CMO_ANNOUNCE_IP}"
             printf '%s\n' "sentinel announce-port ${CMO_ANNOUNCE_PORT:-${CMO_PORT}}"
         fi
-    } > /tmp/cmo-sentinel.conf
-    chmod 600 /tmp/cmo-sentinel.conf
-    exec valkey-sentinel /tmp/cmo-sentinel.conf "$@"
+    } > "${CMO_RUNTIME_DIR}/cmo-sentinel.conf"
+    chmod 600 "${CMO_RUNTIME_DIR}/cmo-sentinel.conf"
+    exec valkey-sentinel "${CMO_RUNTIME_DIR}/cmo-sentinel.conf" "$@"
 fi
 
 replica_host=""
@@ -261,8 +268,17 @@ if [ "$CMO_ROLE" = "replica" ]; then
 fi
 
 umask 077
+# valkey.conf says `dir /data`. That path exists in the image. On a VM the
+# data directory is /var/lib/cache-me-outside, and Valkey rejects the include
+# before a later `dir` line can override it. Rewrite those two paths first.
+sed \
+    -e "s|^dir /data\$|dir ${CMO_DATA_DIR}|" \
+    -e "s|^aclfile /tmp/cmo-users.acl\$|aclfile ${acl_file}|" \
+    /etc/cache-me-outside/valkey.conf > "${CMO_RUNTIME_DIR}/valkey.included.conf"
 {
-    printf '%s\n' "include /etc/cache-me-outside/valkey.conf"
+    printf '%s\n' "include ${CMO_RUNTIME_DIR}/valkey.included.conf"
+    printf '%s\n' "dir ${CMO_DATA_DIR}"
+    printf '%s\n' "aclfile ${acl_file}"
     printf '%s\n' "bind ${CMO_CONTAINER_BIND}"
     printf '%s\n' "port ${CMO_PORT}"
     printf '%s\n' "maxmemory ${CMO_MAXMEMORY}"
@@ -283,7 +299,7 @@ umask 077
     fi
     if [ "$CMO_CLUSTER_ENABLED" = "yes" ]; then
         printf '%s\n' "cluster-enabled yes"
-        printf '%s\n' "cluster-config-file /data/nodes.conf"
+        printf '%s\n' "cluster-config-file ${CMO_DATA_DIR}/nodes.conf"
         printf '%s\n' "cluster-node-timeout ${CMO_CLUSTER_NODE_TIMEOUT}"
         if [ -n "${CMO_ANNOUNCE_IP:-}" ]; then
             printf '%s\n' "cluster-announce-ip ${CMO_ANNOUNCE_IP}"
@@ -295,7 +311,7 @@ umask 077
             printf '%s\n' "cluster-preferred-endpoint-type hostname"
         fi
     fi
-} > /tmp/cmo-runtime.conf
-chmod 600 /tmp/cmo-runtime.conf
+} > "${CMO_RUNTIME_DIR}/cmo-runtime.conf"
+chmod 600 "${CMO_RUNTIME_DIR}/cmo-runtime.conf"
 
-exec valkey-server /tmp/cmo-runtime.conf "$@"
+exec valkey-server "${CMO_RUNTIME_DIR}/cmo-runtime.conf" "$@"

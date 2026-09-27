@@ -3,11 +3,13 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
+# shellcheck disable=SC1091
+source ./lib.sh
 
 compose_down() {
     local file="$1"
     if [[ -f "$file" ]]; then
-        docker compose --project-directory "$(pwd)" -p cache-me-outside -f "$file" down -v --remove-orphans || true
+        cmo_dc -f "$file" down -v --remove-orphans || true
     fi
 }
 

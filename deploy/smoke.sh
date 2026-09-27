@@ -28,11 +28,13 @@ while [[ $# -gt 0 ]]; do
 done
 export CMO_TOPOLOGY="$topology"
 
-if [[ ! -f .env && "$generate_env" -eq 1 ]]; then
+env_path="$(cmo_env_path)"
+if [[ ! -f "$env_path" && "$generate_env" -eq 1 ]]; then
     umask 077
+    mkdir -p "$(dirname "$env_path")"
     admin_password="$(openssl rand -hex 24)"
     app_password="$(openssl rand -hex 24)"
-    cat > .env <<EOF
+    cat > "$env_path" <<EOF
 CMO_ADMIN_USER=admin
 CMO_ADMIN_PASSWORD=${admin_password}
 CMO_APP_USER=app
@@ -46,9 +48,9 @@ CMO_CONTAINER_MEMORY=512m
 CMO_CPUS=1.0
 CMO_IO_THREADS=1
 EOF
-    chmod 600 .env
+    chmod 600 "$env_path"
     unset admin_password app_password
-    echo "Wrote deploy/.env with generated passwords. The passwords were not printed."
+    echo "Wrote ${env_path} with generated passwords. The passwords were not printed."
 fi
 
 if [[ "$no_up" -eq 0 ]]; then
@@ -167,7 +169,7 @@ if [[ "$topology" == "standalone" ]]; then
     fi
     # Later topologies read .env. Put the documented default back; this process
     # keeps the live 320mb until it is recreated.
-    sed -i 's/^CMO_MAXMEMORY=.*/CMO_MAXMEMORY=256mb/' .env
+    sed -i 's/^CMO_MAXMEMORY=.*/CMO_MAXMEMORY=256mb/' "$(cmo_env_path)"
 fi
 
 sleep 2
@@ -191,9 +193,9 @@ done
 [[ "$saved" -eq 1 ]] || fail "RDB snapshot or AOF directory is missing on a data volume"
 
 if [[ "$topology" == "standalone" ]]; then
-    docker compose --project-directory "$(pwd)" -p cache-me-outside -f docker-compose.yml restart "$container" >/dev/null
+    cmo_dc -f docker-compose.yml restart "$container" >/dev/null
 else
-    docker compose --project-directory "$(pwd)" -p cache-me-outside -f .generated/compose.yml restart >/dev/null
+    cmo_dc -f .generated/compose.yml restart >/dev/null
 fi
 cmo_wait_healthy "$container"
 if [[ "$topology" == "cluster" ]]; then

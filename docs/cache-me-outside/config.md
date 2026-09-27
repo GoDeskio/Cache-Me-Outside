@@ -34,6 +34,10 @@ Passwords are not in the config file. The entrypoint writes `/tmp/cmo-users.acl`
 | `CMO_CLUSTER_NODE_TIMEOUT` | `5000` | `cluster-node-timeout` |
 | `CMO_ANNOUNCE_IP` | empty | Address other hosts use. Required for `./up.sh node`. Never `0.0.0.0` |
 | `CMO_CONTAINER_BIND` | `0.0.0.0` | Address the process binds **inside** the container |
+| `CMO_ENV_FILE` | `deploy/.env` | Env file used by the scripts and by Compose. Set this when the file is outside the repo |
+| `CMO_NETWORK_ALIAS` | `cache-me-outside` | DNS name on `proxy-net`. `redis` and `valkey` are refused |
+| `CMO_BENCH_OUT_DIR` | `deploy/results` | Directory for `bench.sh` reports |
+| `CMO_BENCH_USER` | `app` | `admin` runs the benchmark as the admin user so it can `CONFIG` |
 
 `CMO_CONTAINER_BIND` is not in the example env file. It has to be an address inside the container network namespace so published ports and `proxy-net` work. It is not the host bind. Host exposure is only `CMO_BIND_ADDRESS`.
 

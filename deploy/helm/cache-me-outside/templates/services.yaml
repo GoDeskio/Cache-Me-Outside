@@ -4,6 +4,9 @@ metadata:
   name: {{ include "cmo.headless" . }}
   labels:
     {{- include "cmo.labels" . | nindent 4 }}
+    {{- if and .Values.metrics.exporter.enabled (eq .Values.topology "sentinel") }}
+    cache-me-outside.io/metrics: "true"
+    {{- end }}
 spec:
   clusterIP: None
   publishNotReadyAddresses: true
@@ -16,6 +19,11 @@ spec:
     - name: bus
       port: 16379
       targetPort: bus
+    {{- if and .Values.metrics.exporter.enabled (eq .Values.topology "sentinel") }}
+    - name: metrics
+      port: {{ .Values.metrics.exporter.port }}
+      targetPort: metrics
+    {{- end }}
 ---
 {{- if ne .Values.topology "sentinel" }}
 apiVersion: v1
@@ -24,6 +32,9 @@ metadata:
   name: {{ include "cmo.fullname" . }}
   labels:
     {{- include "cmo.labels" . | nindent 4 }}
+    {{- if .Values.metrics.exporter.enabled }}
+    cache-me-outside.io/metrics: "true"
+    {{- end }}
 spec:
   type: ClusterIP
   selector:
@@ -32,6 +43,11 @@ spec:
     - name: client
       port: 6379
       targetPort: client
+    {{- if .Values.metrics.exporter.enabled }}
+    - name: metrics
+      port: {{ .Values.metrics.exporter.port }}
+      targetPort: metrics
+    {{- end }}
 {{- end }}
 {{- if eq .Values.topology "sentinel" }}
 ---

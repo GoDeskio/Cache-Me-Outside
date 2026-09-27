@@ -1,0 +1,21 @@
+CMO_ADMIN_USER={{ cmo_admin_user }}
+CMO_ADMIN_PASSWORD={{ cmo_admin_password }}
+CMO_APP_USER={{ cmo_app_user }}
+CMO_APP_PASSWORD={{ cmo_app_password }}
+CMO_ROLE={{ cmo_role }}
+CMO_CLUSTER_ENABLED={{ cmo_cluster_enabled }}
+CMO_BIND_ADDRESS={{ cmo_bind_address }}
+CMO_PORT={{ cmo_port }}
+CMO_MAXMEMORY={{ cmo_maxmemory }}
+CMO_MAXMEMORY_POLICY={{ cmo_maxmemory_policy }}
+CMO_IO_THREADS={{ cmo_io_threads }}
+{% if cmo_primary_host | length > 0 %}
+CMO_PRIMARY_HOST={{ cmo_primary_host }}
+CMO_PRIMARY_PORT={{ cmo_primary_port }}
+{% endif %}
+{% if cmo_announce_ip | length > 0 %}
+CMO_ANNOUNCE_IP={{ cmo_announce_ip }}
+CMO_ANNOUNCE_PORT={{ cmo_announce_port }}
+CMO_ANNOUNCE_BUS_PORT={{ cmo_announce_bus_port }}
+CMO_CLUSTER_NODE_TIMEOUT={{ cmo_cluster_node_timeout }}
+{% endif %}

@@ -26,7 +26,8 @@ spec:
       automountServiceAccountToken: false
       securityContext:
         {{- include "cmo.podSecurity" . | nindent 8 }}
-      terminationGracePeriodSeconds: 20
+      terminationGracePeriodSeconds: {{ .Values.gracefulShutdown.terminationGracePeriodSeconds }}
+      {{- include "cmo.spread" (merge (dict "component" "data") .) | nindent 6 }}
       containers:
         - name: valkey
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
@@ -42,6 +43,10 @@ spec:
               {{- end }}
             - name: bus
               containerPort: 16379
+              {{- if and .Values.hostPort.enabled (eq .Values.topology "cluster") }}
+              hostPort: {{ .Values.hostPort.busPort }}
+              hostIP: {{ $address | quote }}
+              {{- end }}
           env:
             {{- include "cmo.authEnv" . | nindent 12 }}
             - name: CMO_POD_NAME
@@ -79,28 +84,62 @@ spec:
               value: "yes"
             - name: CMO_CLUSTER_NODE_TIMEOUT
               value: {{ .Values.cluster.nodeTimeout | quote }}
+            {{- if eq .Values.cluster.announce.mode "ip" }}
+            {{- if not .Values.hostPort.enabled }}
+            {{- fail "cluster.announce.mode ip requires hostPort.enabled so peers can reach a published address" }}
+            {{- end }}
+            - name: CMO_ANNOUNCE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: CMO_ANNOUNCE_PORT
+              value: {{ .Values.hostPort.clientPort | quote }}
+            - name: CMO_ANNOUNCE_BUS_PORT
+              value: {{ .Values.hostPort.busPort | quote }}
+            {{- else }}
             - name: CMO_ANNOUNCE_HOSTNAME
               value: "$(CMO_POD_NAME).$(CMO_HEADLESS_SERVICE)"
             {{- end }}
-          readinessProbe:
-            exec:
-              command: ["/usr/local/bin/healthcheck.sh"]
-            initialDelaySeconds: 3
-            periodSeconds: 5
-            timeoutSeconds: 3
-            failureThreshold: 12
+            {{- end }}
+          {{- include "cmo.probes" . | nindent 10 }}
+          {{- include "cmo.preStop" (merge (dict "shutdownMode" "SAVE") .) | nindent 10 }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: data
               mountPath: /data
+        {{- if .Values.metrics.exporter.enabled }}
+        - name: metrics
+          image: "{{ .Values.metrics.exporter.image.repository }}:{{ .Values.metrics.exporter.image.tag }}"
+          imagePullPolicy: {{ .Values.metrics.exporter.image.pullPolicy }}
+          securityContext:
+            {{- include "cmo.containerSecurity" . | nindent 12 }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.metrics.exporter.port }}
+          env:
+            - name: REDIS_ADDR
+              value: "redis://127.0.0.1:6379"
+            - name: REDIS_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.existingSecret }}
+                  key: {{ .Values.auth.adminUserKey }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth.existingSecret }}
+                  key: {{ .Values.auth.adminPasswordKey }}
+          resources:
+            {{- toYaml .Values.metrics.exporter.resources | nindent 12 }}
+        {{- end }}
   volumeClaimTemplates:
     - metadata:
         name: data
         labels:
           {{- include "cmo.labels" . | nindent 10 }}
       spec:
-        accessModes: ["ReadWriteOnce"]
+        accessModes: ["{{ .Values.persistence.accessMode }}"]
         {{- if .Values.persistence.storageClass }}
         storageClassName: {{ .Values.persistence.storageClass | quote }}
         {{- end }}

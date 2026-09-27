@@ -1,0 +1,26 @@
+#!/bin/sh
+set -e
+
+install -d -m 750 /var/lib/cache-me-outside
+install -d -m 750 /etc/cache-me-outside
+if ! getent group valkey >/dev/null; then
+    addgroup --system valkey
+fi
+if ! getent passwd valkey >/dev/null; then
+    adduser --system --ingroup valkey --home /var/lib/cache-me-outside \
+        --no-create-home --shell /usr/sbin/nologin valkey
+fi
+chown valkey:valkey /var/lib/cache-me-outside
+chown root:valkey /etc/cache-me-outside
+
+if [ ! -f /etc/cache-me-outside/environment ]; then
+    install -o root -g valkey -m 640 \
+        /usr/share/cache-me-outside/environment.example \
+        /etc/cache-me-outside/environment
+fi
+
+if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then
+    systemctl daemon-reload || true
+fi
+
+exit 0

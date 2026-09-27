@@ -1,0 +1,47 @@
+#cloud-config
+# Debian 12 cloud-init snippet for one Cache-Me-Outside node.
+# Copy it into the VM's user-data and replace the passwords before first boot.
+# The placeholders are refused by the server, so a copied example will not
+# start with a known password.
+#
+# Pick one role by uncommenting a single block in the environment file below:
+#   standalone  local cache, bind 127.0.0.1
+#   replica     CMO_ROLE=replica and CMO_PRIMARY_HOST of the current primary
+#   cluster     CMO_ROLE=cluster, CMO_CLUSTER_ENABLED=yes, CMO_ANNOUNCE_IP
+#
+# 203.0.113.10 is documentation space (TEST-NET-3), not a real network.
+# Use the address other nodes can route to. Never use 0.0.0.0.
+
+package_update: true
+packages:
+  - ca-certificates
+
+write_files:
+  - path: /etc/cache-me-outside/environment
+    owner: root:root
+    permissions: "0600"
+    content: |
+      CMO_ADMIN_USER=admin
+      CMO_ADMIN_PASSWORD=replace-with-a-long-random-admin-secret
+      CMO_APP_USER=app
+      CMO_APP_PASSWORD=replace-with-a-long-random-app-secret
+      CMO_ROLE=standalone
+      CMO_CLUSTER_ENABLED=no
+      CMO_BIND_ADDRESS=127.0.0.1
+      CMO_PORT=6379
+      CMO_MAXMEMORY=256mb
+      CMO_MAXMEMORY_POLICY=allkeys-lru
+      CMO_IO_THREADS=1
+      # CMO_ROLE=replica
+      # CMO_PRIMARY_HOST=203.0.113.10
+      # CMO_PRIMARY_PORT=6379
+      # CMO_ANNOUNCE_IP=203.0.113.11
+      # CMO_ROLE=cluster
+      # CMO_CLUSTER_ENABLED=yes
+      # CMO_BIND_ADDRESS=203.0.113.10
+      # CMO_ANNOUNCE_IP=203.0.113.10
+      # CMO_ANNOUNCE_PORT=6379
+      # CMO_ANNOUNCE_BUS_PORT=16379
+
+runcmd:
+  - [systemctl, enable, --now, cache-me-outside.service]
