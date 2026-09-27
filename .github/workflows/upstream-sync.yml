@@ -1,0 +1,32 @@
+name: Sync upstream Valkey
+
+on:
+  schedule:
+    # Monday 06:00 UTC. Opens a pull request; does not push to unstable.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: cmo-upstream-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    name: Open upstream sync pull request
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          ref: unstable
+
+      - name: Merge upstream unstable and open a pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/sync-upstream.sh

@@ -1,0 +1,21 @@
+# Optional: attach the cache to an external Docker network named proxy-net
+# so other containers can reach it as cache-me-outside.
+#
+# The network must already exist. This file is not applied by deploy/up.sh.
+#
+#   docker network create proxy-net
+#   docker compose -f docker-compose.yml -f docker-compose.proxy-net.yml up -d
+
+services:
+  cache-me-outside:
+    networks:
+      proxy-net:
+        aliases:
+          - cache-me-outside
+          - valkey
+          - redis
+
+networks:
+  proxy-net:
+    external: true
+    name: proxy-net

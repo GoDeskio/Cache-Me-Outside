@@ -1,3 +1,13 @@
+# Cache-Me-Outside
+
+Cache-Me-Outside is GoDesk's home-lab cache: a fork of [Valkey](https://github.com/valkey-io/valkey) (`unstable`), which itself continues the open source Redis code base from before the license change. This tree builds and runs the Valkey server. Command names, the wire protocol, and the `valkey-*` binaries are unchanged, and `make install` still adds `redis-*` compatibility symlinks, so existing Redis and Valkey clients keep working.
+
+Builds add an `INFO server` field, `cmo_version`, set to the Valkey version plus `-cmo` (for example `255.255.255-cmo`). `valkey_version` stays a numeric `major.minor.patch` string so replication and client version checks stay compatible.
+
+Valkey and Redis code remain under the BSD 3-Clause License. See [COPYING](COPYING) and [NOTICE](NOTICE). Operator documentation is in [docs/cache-me-outside/](docs/cache-me-outside/README.md).
+
+---
+
 [![codecov](https://codecov.io/gh/valkey-io/valkey/graph/badge.svg?token=KYYSJAYC5F)](https://codecov.io/gh/valkey-io/valkey)
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/valkey-io/valkey/badge)](https://securityscorecards.dev/viewer/?uri=github.com/valkey-io/valkey)
 

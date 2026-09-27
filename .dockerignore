@@ -1,0 +1,30 @@
+.git
+.github
+docs
+tests
+utils
+design-docs
+deploy/results
+deploy/.env
+**/.env
+*.log
+dump.rdb
+nodes.conf
+# Host build products. Copying them into the image makes the container
+# linker try to reuse objects built by a different compiler.
+**/*.o
+**/*.a
+**/*.so
+**/*.d
+**/*.lo
+**/*.la
+src/release.h
+src/Makefile.dep
+.make-*
+src/valkey-server
+src/valkey-cli
+src/valkey-benchmark
+src/valkey-sentinel
+src/valkey-check-rdb
+src/valkey-check-aof
+src/valkey-unit-gtests

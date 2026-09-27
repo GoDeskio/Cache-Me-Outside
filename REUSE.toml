@@ -126,3 +126,20 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2013, Google Inc."
 SPDX-License-Identifier = "Apache-2.0"
 SPDX-FileComment = "Development/testing dependency only. Not present in compiled binaries."
+
+[[annotations]]
+path = [
+    "src/cmo_version.h",
+    "NOTICE",
+    "Dockerfile",
+    ".dockerignore",
+    "deploy/**",
+    "docs/cache-me-outside/**",
+    "tests/unit/cmo-version.tcl",
+    ".github/workflows/cmo-ci.yml",
+    ".github/workflows/upstream-sync.yml",
+    ".github/scripts/sync-upstream.sh",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2026, GoDesk"
+SPDX-License-Identifier = "BSD-3-Clause"

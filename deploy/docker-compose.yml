@@ -1,0 +1,49 @@
+# Single-node Cache-Me-Outside for a home lab.
+# Start with deploy/up.sh so the host publish address is checked first.
+#
+# The server process binds 0.0.0.0 inside the container network namespace.
+# The host port below defaults to 127.0.0.1 and must not be 0.0.0.0.
+# On Docker Desktop (Windows, Linux containers) 127.0.0.1 is the Windows
+# localhost. Set CMO_BIND_ADDRESS to a LAN IP when other machines on the
+# network should connect. Do not publish the port on every host interface.
+
+name: cache-me-outside
+
+services:
+  cache-me-outside:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: cache-me-outside:local
+    container_name: cache-me-outside
+    env_file:
+      - .env
+    environment:
+      CMO_MAXMEMORY: ${CMO_MAXMEMORY:-256mb}
+      CMO_MAXMEMORY_POLICY: ${CMO_MAXMEMORY_POLICY:-allkeys-lru}
+      CMO_PORT: ${CMO_PORT:-6379}
+    ports:
+      - "${CMO_BIND_ADDRESS:-127.0.0.1}:${CMO_HOST_PORT:-6379}:6379"
+    volumes:
+      - cache-data:/data
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: ${CMO_CONTAINER_MEMORY:-512m}
+    networks:
+      cmo: {}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  cache-data:
+    name: cache-me-outside-data
+
+networks:
+  cmo:
+    name: cache-me-outside
