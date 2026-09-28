@@ -29,6 +29,8 @@ install -d -m 0755 "$lib" "$share" \
 
 install -m 0755 packaging/cmo-run.sh "${lib}/cmo-run"
 install -m 0755 packaging/cmo-shutdown.sh "${lib}/cmo-shutdown"
+install -m 0755 packaging/cmo-join-cluster.sh "${lib}/cmo-join-cluster"
+install -m 0755 packaging/cmo-form-cluster.sh "${lib}/cmo-form-cluster"
 install -m 0755 packaging/smoke-native.sh "${lib}/smoke-native.sh"
 install -m 0755 deploy/docker-entrypoint.sh "${lib}/docker-entrypoint.sh"
 install -m 0755 deploy/healthcheck.sh "${lib}/healthcheck.sh"

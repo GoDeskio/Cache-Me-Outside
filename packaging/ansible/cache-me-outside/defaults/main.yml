@@ -13,6 +13,11 @@ cmo_announce_ip: ""
 cmo_announce_port: 6379
 cmo_announce_bus_port: 16379
 cmo_cluster_node_timeout: 5000
+cmo_form_cluster: false
+cmo_cluster_replicas: 0
+cmo_cluster_seed: ""
+cmo_cluster_join_as: primary
+cmo_cluster_primary_id: ""
 cmo_deb_path: ""
 cmo_environment_file: /etc/cache-me-outside/environment
 cmo_service: cache-me-outside.service

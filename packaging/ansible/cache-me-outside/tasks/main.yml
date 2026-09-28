@@ -1,3 +1,9 @@
+- name: Do not both create a cluster and join one
+  ansible.builtin.assert:
+    that:
+      - not ((cmo_form_cluster | default(false) | bool) and (cmo_cluster_seed | default('') | length > 0))
+    fail_msg: Set cmo_form_cluster or cmo_cluster_seed, not both.
+
 - name: Refuse wildcard bind and announce addresses
   ansible.builtin.assert:
     that:
@@ -40,3 +46,14 @@
     enabled: true
     state: started
     daemon_reload: true
+
+- name: Apply a changed environment before joining
+  when: cmo_cluster_seed | default('') | length > 0
+  ansible.builtin.meta: flush_handlers
+
+- name: Join an existing cluster when a seed is set
+  when: cmo_cluster_seed | default('') | length > 0
+  ansible.builtin.command: /usr/lib/cache-me-outside/cmo-join-cluster
+  environment:
+    CMO_ENVIRONMENT_FILE: "{{ cmo_environment_file }}"
+  no_log: true

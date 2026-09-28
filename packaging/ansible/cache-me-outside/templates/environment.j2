@@ -19,3 +19,10 @@ CMO_ANNOUNCE_PORT={{ cmo_announce_port }}
 CMO_ANNOUNCE_BUS_PORT={{ cmo_announce_bus_port }}
 CMO_CLUSTER_NODE_TIMEOUT={{ cmo_cluster_node_timeout }}
 {% endif %}
+{% if cmo_cluster_seed | default('') | length > 0 %}
+CMO_CLUSTER_SEED={{ cmo_cluster_seed }}
+CMO_CLUSTER_JOIN_AS={{ cmo_cluster_join_as | default('primary') }}
+{% if cmo_cluster_primary_id | default('') | length > 0 %}
+CMO_CLUSTER_PRIMARY_ID={{ cmo_cluster_primary_id }}
+{% endif %}
+{% endif %}

@@ -94,7 +94,18 @@ jobs:
             grep -q "^User=valkey" /lib/systemd/system/cache-me-outside.service
             grep -q "^ProtectSystem=strict" /lib/systemd/system/cache-me-outside.service
             grep -q "ExecStop=/usr/lib/cache-me-outside/cmo-shutdown" /lib/systemd/system/cache-me-outside.service
+            test -x /usr/lib/cache-me-outside/cmo-join-cluster
+            test -x /usr/lib/cache-me-outside/cmo-form-cluster
+            /usr/lib/cache-me-outside/cmo-join-cluster
+            chmod a+r "dist/${deb}"
           '
+
+      - name: Publish the Debian package
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: cache-me-outside-deb
+          path: dist/cache-me-outside_*.deb
+          if-no-files-found: error
 
   k8s:
     name: Helm lint and kind smoke

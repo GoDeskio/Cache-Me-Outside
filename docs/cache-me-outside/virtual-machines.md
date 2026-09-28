@@ -13,7 +13,7 @@ make -j"$(nproc)"
 ./packaging/build-deb.sh
 ```
 
-That writes `dist/cache-me-outside_<version>_<arch>.deb`. Build it on Debian 12 or Ubuntu with a glibc no newer than the machines that will install it. A binary built on a newer host will not start on Bookworm. CI compiles inside a Debian 12 container for that reason. The package does not start the server. `postinst` creates a `valkey` system user and, if `/etc/cache-me-outside/environment` is missing, copies the example file. The example passwords are placeholders. The server refuses them.
+That writes `dist/cache-me-outside_<version>_<arch>.deb`. Build it on Debian 12 or Ubuntu with a glibc no newer than the machines that will install it. A binary built on a newer host will not start on Bookworm. CI compiles inside a Debian 12 container for that reason and uploads the package as the `cache-me-outside-deb` workflow artifact. The package does not start the server. `postinst` creates a `valkey` system user and, if `/etc/cache-me-outside/environment` is missing, copies the example file. The example passwords are placeholders. The server refuses them.
 
 ```bash
 sudo dpkg -i dist/cache-me-outside_*.deb
@@ -56,11 +56,13 @@ CMO_ANNOUNCE_PORT=6379
 CMO_ANNOUNCE_BUS_PORT=16379
 ```
 
-Form the cluster from any node that can resolve the others, with `valkey-cli --cluster create` as the admin user. Adding a node later is `valkey-cli --cluster add-node` and, for a new primary, `--cluster rebalance --cluster-use-empty-primaries`. Open both the client port and the bus port (client port + 10000) between nodes.
+Form the first cluster with `cmo-form-cluster` (installed as `/usr/lib/cache-me-outside/cmo-form-cluster`). It takes one `host:port` per node, at least three, and uses `VALKEYCLI_AUTH` plus `CMO_ADMIN_USER`. It does nothing when the first node already reports `cluster_state:ok`. `CMO_CLUSTER_REPLICAS` is the `--cluster-replicas` count (default 0, every argument is a primary).
+
+A later VM joins that cluster by setting `CMO_CLUSTER_SEED` to `host:port` of a node that is already a member, `CMO_ANNOUNCE_IP` to this VM, and `CMO_CLUSTER_JOIN_AS` to `primary` or `replica`. `/usr/lib/cache-me-outside/cmo-join-cluster` runs after the unit is up. A primary join rebalances slots onto the empty node. A replica join also needs `CMO_CLUSTER_PRIMARY_ID`. The script returns immediately when `CMO_CLUSTER_SEED` is unset, and it returns without moving slots when this address is already in the cluster. Do not point the seed at this same VM. Open both the client port and the bus port (client port + 10000) between nodes.
 
 ## Cloud-init
 
-`packaging/cloud-init/user-data.example.yaml` is a Debian 12 snippet: it writes `/etc/cache-me-outside/environment` and enables the unit. Install the `.deb` in the image (or a Proxmox template) before first boot. Replace the passwords in the snippet you actually feed to the VM. Leave the role block you want and delete the other commented lines so a later reader does not turn a replica into a cluster node by uncommenting both.
+`packaging/cloud-init/user-data.example.yaml` is a Debian 12 snippet: it writes `/etc/cache-me-outside/environment`, enables the unit, and runs `cmo-join-cluster`. Install the `.deb` in the image (or a Proxmox template) before first boot. Replace the passwords in the snippet you actually feed to the VM. Leave the role block you want and delete the other commented lines so a later reader does not turn a replica into a cluster node by uncommenting both. With no `CMO_CLUSTER_SEED`, the join script returns without contacting another node, so the same snippet is a standalone node, a Sentinel replica (`CMO_ROLE=replica` and `CMO_PRIMARY_HOST`), or a cluster node that joins an existing cluster.
 
 ## Ansible
 
@@ -71,14 +73,14 @@ cd packaging/ansible
 ansible-playbook -i /path/to/your-inventory site.yml
 ```
 
-`inventory.example.ini` shows the shape with documentation addresses. Keep the real inventory and the password vars (`cmo_admin_password`, `cmo_app_password`) outside the repo. The role refuses `0.0.0.0` and placeholder passwords. `cmo_deb_path` points at a built package on the target, or leave it empty when the package is already installed.
+`inventory.example.ini` shows the shape with documentation addresses and `cmo_form_cluster=yes`, which makes the second play run `cmo-form-cluster` across the group. Keep the real inventory and the password vars (`cmo_admin_password`, `cmo_app_password`) outside the repo. The role refuses `0.0.0.0` and placeholder passwords, and it refuses setting both `cmo_form_cluster` and `cmo_cluster_seed`. `cmo_deb_path` points at a built package on the target, or leave it empty when the package is already installed. A single extra VM sets `cmo_cluster_seed` to an existing member and `cmo_cluster_join_as` to `primary` or `replica` instead of forming a new cluster.
 
 ## Mixed with containers and Kubernetes
 
 A node joins a cluster or a replication group by address, not by install method.
 
 - A container started with `./up.sh node` publishes `CMO_BIND_ADDRESS` and announces `CMO_ANNOUNCE_IP`.
-- A VM announces `CMO_ANNOUNCE_IP` and binds that address plus loopback.
+- A VM announces `CMO_ANNOUNCE_IP` and binds that address plus loopback. `cmo-join-cluster` adds it when `CMO_CLUSTER_SEED` names a member that is already up.
 - A pod announces its in-cluster DNS name by default. That name is useless to a VM outside the cluster. To join VMs, set `cluster.announce.mode` to `ip` and enable `hostPort` on one address (`hostIP`, never `0.0.0.0`). The chart then announces the node's host IP and the published client and bus ports. The pod IP is not assumed to be routable.
 
 Use the same admin and app passwords on every member. The app user stays blocked from `@admin` and `@dangerous` on each of them.

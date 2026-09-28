@@ -7,7 +7,9 @@
 # Pick one role by uncommenting a single block in the environment file below:
 #   standalone  local cache, bind 127.0.0.1
 #   replica     CMO_ROLE=replica and CMO_PRIMARY_HOST of the current primary
-#   cluster     CMO_ROLE=cluster, CMO_CLUSTER_ENABLED=yes, CMO_ANNOUNCE_IP
+#   cluster     CMO_ROLE=cluster, CMO_CLUSTER_ENABLED=yes, CMO_ANNOUNCE_IP,
+#               and CMO_CLUSTER_SEED of a node that is already in the cluster.
+#               cmo-join-cluster adds this VM and, for a primary, rebalances.
 #
 # 203.0.113.10 is documentation space (TEST-NET-3), not a real network.
 # Use the address other nodes can route to. Never use 0.0.0.0.
@@ -42,6 +44,9 @@ write_files:
       # CMO_ANNOUNCE_IP=203.0.113.10
       # CMO_ANNOUNCE_PORT=6379
       # CMO_ANNOUNCE_BUS_PORT=16379
+      # CMO_CLUSTER_SEED=203.0.113.10:6379
+      # CMO_CLUSTER_JOIN_AS=primary
 
 runcmd:
   - [systemctl, enable, --now, cache-me-outside.service]
+  - [/usr/lib/cache-me-outside/cmo-join-cluster]

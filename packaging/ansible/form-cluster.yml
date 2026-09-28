@@ -1,0 +1,25 @@
+- name: Wait until this node accepts connections
+  when: cmo_form_cluster | default(false) | bool
+  ansible.builtin.wait_for:
+    host: "{{ cmo_announce_ip | default('127.0.0.1') }}"
+    port: "{{ cmo_port | default(6379) }}"
+    timeout: 90
+
+- name: Create the cluster from the inventory
+  when: cmo_form_cluster | default(false) | bool
+  run_once: true
+  ansible.builtin.shell: |
+    set -eu
+    nodes=""
+    {% for host in groups['cmo'] %}
+    nodes="$nodes {{ hostvars[host].cmo_announce_ip }}:{{ hostvars[host].cmo_port | default(6379) }}"
+    {% endfor %}
+    # shellcheck disable=SC2086
+    /usr/lib/cache-me-outside/cmo-form-cluster $nodes
+  args:
+    executable: /bin/sh
+  environment:
+    CMO_ADMIN_USER: "{{ cmo_admin_user | default('admin') }}"
+    VALKEYCLI_AUTH: "{{ cmo_admin_password | default('') }}"
+    CMO_CLUSTER_REPLICAS: "{{ cmo_cluster_replicas | default(0) }}"
+  no_log: true

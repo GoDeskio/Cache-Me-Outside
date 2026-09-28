@@ -3,3 +3,9 @@
   become: true
   roles:
     - cache-me-outside
+
+- name: Form a cluster when the inventory asks for one
+  hosts: cmo
+  become: true
+  tasks:
+    - ansible.builtin.import_tasks: form-cluster.yml

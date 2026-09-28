@@ -28,10 +28,15 @@ CMO_IO_THREADS=1
 # CMO_PRIMARY_HOST=
 # CMO_PRIMARY_PORT=6379
 
-# Cluster, including a node that will join containers or pods:
+# Cluster member. Announce the address other VMs, containers, and pods can route to.
 # CMO_ROLE=cluster
 # CMO_CLUSTER_ENABLED=yes
 # CMO_ANNOUNCE_IP=203.0.113.10
 # CMO_ANNOUNCE_PORT=6379
 # CMO_ANNOUNCE_BUS_PORT=16379
 # CMO_CLUSTER_NODE_TIMEOUT=5000
+# Join an existing cluster (cmo-join-cluster). Do not set this on the nodes
+# that cmo-form-cluster creates together.
+# CMO_CLUSTER_SEED=203.0.113.10:6379
+# CMO_CLUSTER_JOIN_AS=primary
+# CMO_CLUSTER_PRIMARY_ID=

@@ -16,7 +16,7 @@ These are proposals. None of them are implemented in the foundation branch. They
 
 6. **Measured runtime tuning.** `CMO_IO_THREADS` and `CMO_CPUS` are knobs now, and the default is still one I/O thread. Before raising them, or before turning on active defrag or the jemalloc background thread, run `deploy/bench.sh` and keep the results file. Only keep a change that shows up there on this hardware.
 
-7. **A replica profile.** Shipped as `./up.sh sentinel` (primary, N replicas, Sentinel), `./up.sh cluster`, a Helm chart, and a `.deb` with systemd, cloud-init, and an Ansible role. What is still open is a reachability check of every announce address before bootstrap. Do not commit an inventory of real machines. Not Kubernetes autoscaling.
+7. **A replica profile.** Shipped as `./up.sh sentinel` (primary, N replicas, Sentinel), `./up.sh cluster`, a Helm chart, and a `.deb` with systemd, cloud-init, and an Ansible role. `cmo-form-cluster` builds the first VM cluster. `cmo-join-cluster` adds a later VM when `CMO_CLUSTER_SEED` is set. What is still open is a reachability check of every announce address before bootstrap. Do not commit an inventory of real machines. Not Kubernetes autoscaling.
 
 8. **Changelog next to sync pull requests.** When the weekly upstream sync opens, add a short note of Valkey fixes we care about (persistence, ACL, protocol) so the review is not only a raw merge.
 

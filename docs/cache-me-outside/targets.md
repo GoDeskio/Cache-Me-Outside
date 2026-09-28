@@ -6,7 +6,7 @@ Cache-Me-Outside is the same Valkey build in each target. Clients keep using the
 | --- | --- | --- | --- |
 | Docker Compose on Linux, or Docker Desktop with Linux containers | `deploy/up.sh` | standalone, Sentinel, cluster, one node for another host | image build, smoke, Sentinel failover, cluster scale-out |
 | Kubernetes (k3s, kind, and other clusters that run Helm) | `deploy/helm/cache-me-outside` | standalone, Sentinel, cluster | helm lint, kubeconform, kind standalone smoke, kind cluster scale-out |
-| Debian or Ubuntu VM, including a Debian 12 cloud-init image | `packaging/build-deb.sh` and systemd | standalone, replica, Sentinel, cluster node | `.deb` install and native smoke in a Debian 12 container |
+| Debian or Ubuntu VM, including a Debian 12 cloud-init image | `packaging/build-deb.sh` and systemd | standalone, replica, Sentinel, cluster node | `.deb` install and native smoke in a Debian 12 container; the package is a workflow artifact |
 
 Ansible under `packaging/ansible/` is an optional way to push the `.deb` and the environment file onto several VMs. It is not a separate runtime.
 
