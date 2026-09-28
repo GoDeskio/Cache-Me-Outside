@@ -104,6 +104,9 @@ save 300 100
 save 60 10000
 dir /data
 EOF
+# The stock image runs as uid 999 and has to read this mount. The password
+# is a throwaway, so the file is world-readable. It is not the app password.
+chmod 644 "${stock_dir}/stock.conf"
 docker rm -f "$upstream_name" >/dev/null 2>&1 || true
 docker run -d --name "$upstream_name" \
     --network "$CMO_NETWORK" \
