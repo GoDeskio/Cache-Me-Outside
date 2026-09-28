@@ -7,7 +7,7 @@
 # localhost. Set CMO_BIND_ADDRESS to a LAN IP when other machines on the
 # network should connect. Do not publish the port on every host interface.
 
-name: cache-me-outside
+name: ${CMO_PROJECT:-cache-me-outside}
 
 services:
   cache-me-outside:
@@ -15,7 +15,8 @@ services:
       context: ..
       dockerfile: Dockerfile
     image: cache-me-outside:local
-    container_name: cache-me-outside
+    container_name: ${CMO_NAME_PREFIX:-cache-me-outside}
+    hostname: ${CMO_NAME_PREFIX:-cache-me-outside}
     env_file:
       - path: ${CMO_ENV_FILE:-.env}
         required: false
@@ -46,8 +47,8 @@ services:
 
 volumes:
   cache-data:
-    name: cache-me-outside-data
+    name: ${CMO_NAME_PREFIX:-cache-me-outside}-data
 
 networks:
   cmo:
-    name: cache-me-outside
+    name: ${CMO_NETWORK:-cache-me-outside}

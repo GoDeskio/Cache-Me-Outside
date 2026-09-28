@@ -7,10 +7,12 @@ cd "$(dirname "$0")"
 # shellcheck disable=SC1091
 source ./lib.sh
 cmo_load_env
+cmo_apply_names
 
 requests="${CMO_BENCH_REQUESTS:-100000}"
 clients="${CMO_BENCH_CLIENTS:-20}"
-upstream_name="cmo-bench-upstream"
+server_name="$(cmo_standalone_name)"
+upstream_name="${CMO_NAME_PREFIX}-bench-stock"
 upstream_port="16379"
 bench_user="$CMO_APP_USER"
 bench_pass="$CMO_APP_PASSWORD"
@@ -28,17 +30,19 @@ mkdir -p "$out_dir"
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 out="${out_dir}/bench-${stamp}.txt"
 
+stock_dir="$(mktemp -d)"
 cleanup() {
     docker rm -f "$upstream_name" >/dev/null 2>&1 || true
+    rm -rf "$stock_dir"
 }
 trap cleanup EXIT
 
-if ! docker inspect cache-me-outside >/dev/null 2>&1; then
-    echo "cache-me-outside is not running. Start it with ./up.sh." >&2
+if ! docker inspect "$server_name" >/dev/null 2>&1; then
+    echo "${server_name} is not running. Start it with ./up.sh." >&2
     exit 1
 fi
 
-info="$(docker exec cache-me-outside valkey-cli -h 127.0.0.1 -p "$CMO_PORT" \
+info="$(docker exec "$server_name" valkey-cli -h 127.0.0.1 -p "$CMO_PORT" \
     --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning INFO server)"
 version="$(printf '%s\n' "$info" | awk -F: '/^valkey_version:/{gsub(/\r/, "", $2); print $2}')"
 marker="$(printf '%s\n' "$info" | awk -F: '/^cmo_version:/{gsub(/\r/, "", $2); print $2}')"
@@ -50,9 +54,9 @@ config_value() {
         | awk 'NR==2 { gsub(/\r/, "", $0); print }'
 }
 
-cmo_save="$(config_value cache-me-outside "$CMO_PORT" "$CMO_ADMIN_USER" "$CMO_ADMIN_PASSWORD" save || true)"
-cmo_aof="$(config_value cache-me-outside "$CMO_PORT" "$CMO_ADMIN_USER" "$CMO_ADMIN_PASSWORD" appendonly || true)"
-cmo_fsync="$(config_value cache-me-outside "$CMO_PORT" "$CMO_ADMIN_USER" "$CMO_ADMIN_PASSWORD" appendfsync || true)"
+cmo_save="$(config_value "$server_name" "$CMO_PORT" "$CMO_ADMIN_USER" "$CMO_ADMIN_PASSWORD" save || true)"
+cmo_aof="$(config_value "$server_name" "$CMO_PORT" "$CMO_ADMIN_USER" "$CMO_ADMIN_PASSWORD" appendonly || true)"
+cmo_fsync="$(config_value "$server_name" "$CMO_PORT" "$CMO_ADMIN_USER" "$CMO_ADMIN_PASSWORD" appendfsync || true)"
 
 resolve_upstream() {
     local candidate
@@ -81,27 +85,50 @@ if [[ "$upstream_image" != "valkey/valkey:${version}" ]]; then
     note="valkey/valkey:${version} is not published; compared with ${upstream_image}"
 fi
 
-# Match persistence. ACL is not the same: stock uses requirepass on the
-# default user, which can run CONFIG. The report says so.
+# Match persistence and the server's CPU and memory caps. The password is a
+# throwaway written into a mounted file, not the app password and not an
+# argument on the container command line (that shows up in `docker inspect`).
+stock_pass="$(openssl rand -hex 24)"
+umask 077
+cat > "${stock_dir}/stock.conf" <<EOF
+bind 0.0.0.0
+port 6379
+protected-mode yes
+requirepass ${stock_pass}
+maxmemory ${CMO_MAXMEMORY}
+maxmemory-policy ${CMO_MAXMEMORY_POLICY}
+appendonly yes
+appendfsync everysec
+save 3600 1
+save 300 100
+save 60 10000
+dir /data
+EOF
+# The stock image runs as uid 999 and has to read this mount. The password
+# is a throwaway, so the file is world-readable. It is not the app password.
+chmod 644 "${stock_dir}/stock.conf"
+# The client reads the password from the environment, not from `docker run`
+# arguments. valkey-benchmark does not read VALKEYCLI_AUTH, so the wrapper
+# passes -a after the process has started.
+cat > "${stock_dir}/run-bench.sh" <<'EOF'
+#!/bin/sh
+exec valkey-benchmark --user "$CMO_BENCH_USER" -a "$CMO_BENCH_PASSWORD" "$@"
+EOF
+chmod 755 "${stock_dir}/run-bench.sh"
 docker rm -f "$upstream_name" >/dev/null 2>&1 || true
 docker run -d --name "$upstream_name" \
-    --network cache-me-outside \
+    --network "$CMO_NETWORK" \
+    --cpus "$CMO_CPUS" \
+    --memory "$CMO_CONTAINER_MEMORY" \
     -p "127.0.0.1:${upstream_port}:6379" \
+    -v "${stock_dir}/stock.conf:/tmp/stock.conf:ro" \
     "$upstream_image" \
-    --requirepass "$CMO_APP_PASSWORD" \
-    --protected-mode yes \
-    --bind 0.0.0.0 \
-    --maxmemory "$CMO_MAXMEMORY" \
-    --maxmemory-policy "$CMO_MAXMEMORY_POLICY" \
-    --appendonly yes \
-    --appendfsync everysec \
-    --save "3600 1" \
-    --save "300 100" \
-    --save "60 10000" >/dev/null
+    valkey-server /tmp/stock.conf >/dev/null
 
 ready=0
 for _i in $(seq 1 30); do
-    if docker exec "$upstream_name" valkey-cli -a "$CMO_APP_PASSWORD" --no-auth-warning PING 2>/dev/null | grep -q PONG; then
+    if docker exec -e VALKEYCLI_AUTH="$stock_pass" "$upstream_name" \
+        valkey-cli --no-auth-warning PING 2>/dev/null | grep -q PONG; then
         ready=1
         break
     fi
@@ -113,17 +140,28 @@ done
     exit 1
 }
 
-stock_save="$(config_value "$upstream_name" 6379 default "$CMO_APP_PASSWORD" save || true)"
-stock_aof="$(config_value "$upstream_name" 6379 default "$CMO_APP_PASSWORD" appendonly || true)"
-stock_fsync="$(config_value "$upstream_name" 6379 default "$CMO_APP_PASSWORD" appendfsync || true)"
+stock_save="$(config_value "$upstream_name" 6379 default "$stock_pass" save || true)"
+stock_aof="$(config_value "$upstream_name" 6379 default "$stock_pass" appendonly || true)"
+stock_fsync="$(config_value "$upstream_name" 6379 default "$stock_pass" appendfsync || true)"
 
 run_bench() {
-    local container="$1" port="$2" user="$3" pass="$4"
+    local host="$1" port="$2" user="$3" pass="$4"
+    # The client is its own container so it does not share the server CPU cap.
     # The app user cannot CONFIG. valkey-benchmark warns and continues.
     # Drop that one line. The save/appendonly values above were read as admin.
-    docker exec "$container" valkey-benchmark \
-        -h 127.0.0.1 -p "$port" \
-        --user "$user" -a "$pass" \
+    # The password stays in an env file. It is not an argument to docker run.
+    umask 077
+    cat > "${stock_dir}/bench.env" <<EOF
+CMO_BENCH_USER=${user}
+CMO_BENCH_PASSWORD=${pass}
+EOF
+    chmod 600 "${stock_dir}/bench.env"
+    docker run --rm --network "$CMO_NETWORK" \
+        --env-file "${stock_dir}/bench.env" \
+        -v "${stock_dir}/run-bench.sh:/tmp/run-bench.sh:ro" \
+        --entrypoint /tmp/run-bench.sh \
+        cache-me-outside:local \
+        -h "$host" -p "$port" \
         -t set,get -n "$requests" -c "$clients" -d 64 --threads 2 \
         2>&1 | sed '/^WARNING: Could not fetch server CONFIG$/d'
 }
@@ -146,24 +184,27 @@ run_bench() {
     echo "stock_appendfsync: ${stock_fsync}"
     echo "stock_save: ${stock_save}"
     echo
-    echo "Each valkey-benchmark run is inside that server's container, against 127.0.0.1."
+    echo "Each valkey-benchmark run is a separate container on ${CMO_NETWORK}, so it does not share the server CPU cap."
+    echo "Both servers use the same CPU cap (${CMO_CPUS}) and memory limit (${CMO_CONTAINER_MEMORY})."
     echo "Persistence matches: AOF everysec and the same RDB save rules."
     echo "ACL does not: Cache-Me-Outside uses the ${bench_user} user. Stock Valkey uses"
     echo "requirepass on the default user, which can run every command including CONFIG."
+    echo "The stock password is a throwaway in a mounted config file, not the app password."
+    echo "The benchmark client reads its password from an env file, not from the docker run arguments."
     echo "Set CMO_BENCH_USER=admin to benchmark Cache-Me-Outside as the admin user so the"
     echo "client can fetch CONFIG itself. The default stays the app user."
     echo
-    echo "===== cache-me-outside ====="
+    echo "===== ${server_name} ====="
 } | tee "$out"
 
-run_bench cache-me-outside "$CMO_PORT" "$bench_user" "$bench_pass" | tee -a "$out"
+run_bench "$server_name" "$CMO_PORT" "$bench_user" "$bench_pass" | tee -a "$out"
 
 {
     echo
     echo "===== stock valkey (${upstream_image}) ====="
 } | tee -a "$out"
 
-run_bench "$upstream_name" 6379 default "$CMO_APP_PASSWORD" | tee -a "$out"
+run_bench "$upstream_name" 6379 default "$stock_pass" | tee -a "$out"
 
 {
     echo

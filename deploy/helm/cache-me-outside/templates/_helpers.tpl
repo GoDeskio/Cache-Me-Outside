@@ -60,6 +60,42 @@ app.kubernetes.io/component: {{ .component }}
     secretKeyRef:
       name: {{ .Values.auth.existingSecret }}
       key: {{ .Values.auth.appPasswordKey }}
+- name: CMO_REPL_USER
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.auth.existingSecret }}
+      key: {{ .Values.auth.replUserKey }}
+      optional: true
+- name: CMO_REPL_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.auth.existingSecret }}
+      key: {{ .Values.auth.replPasswordKey }}
+      optional: true
+- name: CMO_SENTINEL_USER
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.auth.existingSecret }}
+      key: {{ .Values.auth.sentinelUserKey }}
+      optional: true
+- name: CMO_SENTINEL_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.auth.existingSecret }}
+      key: {{ .Values.auth.sentinelPasswordKey }}
+      optional: true
+- name: CMO_CLUSTER_USER
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.auth.existingSecret }}
+      key: {{ .Values.auth.clusterUserKey }}
+      optional: true
+- name: CMO_CLUSTER_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.auth.existingSecret }}
+      key: {{ .Values.auth.clusterPasswordKey }}
+      optional: true
 {{- end -}}
 
 {{- define "cmo.podSecurity" -}}

@@ -9,6 +9,8 @@ data:
   init.sh: |
     #!/bin/sh
     set -eu
+    mgr_user="${CMO_CLUSTER_USER:-$CMO_ADMIN_USER}"
+    mgr_pass="${CMO_CLUSTER_PASSWORD:-$CMO_ADMIN_PASSWORD}"
     n="${CMO_CLUSTER_SIZE}"
     reps="${CMO_CLUSTER_REPLICAS}"
     i=0
@@ -17,7 +19,7 @@ data:
       host="${CMO_NODE_PREFIX}-${i}.${CMO_HEADLESS_SERVICE}"
       tries=0
       while [ "$tries" -lt 90 ]; do
-        if valkey-cli -h "$host" -p 6379 --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning PING | grep -q PONG; then
+        if valkey-cli -h "$host" -p 6379 --user "$mgr_user" -a "$mgr_pass" --no-auth-warning PING | grep -q PONG; then
           break
         fi
         tries=$((tries + 1))
@@ -31,18 +33,18 @@ data:
       i=$((i + 1))
     done
     host0="${CMO_NODE_PREFIX}-0.${CMO_HEADLESS_SERVICE}"
-    info="$(valkey-cli -h "$host0" -p 6379 --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning CLUSTER INFO || true)"
+    info="$(valkey-cli -h "$host0" -p 6379 --user "$mgr_user" -a "$mgr_pass" --no-auth-warning CLUSTER INFO || true)"
     if printf '%s\n' "$info" | grep -q 'cluster_state:ok'; then
       echo "cluster already formed"
       exit 0
     fi
     # shellcheck disable=SC2086
-    valkey-cli --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning \
+    valkey-cli --user "$mgr_user" -a "$mgr_pass" --no-auth-warning \
       --cluster create $nodes --cluster-replicas "$reps" --cluster-yes || true
     ok=0
     tries=0
     while [ "$tries" -lt 30 ]; do
-      info="$(valkey-cli -h "$host0" -p 6379 --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning CLUSTER INFO || true)"
+      info="$(valkey-cli -h "$host0" -p 6379 --user "$mgr_user" -a "$mgr_pass" --no-auth-warning CLUSTER INFO || true)"
       if printf '%s\n' "$info" | grep -q 'cluster_state:ok'; then
         ok=1
         break
@@ -58,11 +60,13 @@ data:
   scale.sh: |
     #!/bin/sh
     set -eu
+    mgr_user="${CMO_CLUSTER_USER:-$CMO_ADMIN_USER}"
+    mgr_pass="${CMO_CLUSTER_PASSWORD:-$CMO_ADMIN_PASSWORD}"
     new="${CMO_NODE_PREFIX}-${CMO_SCALE_ORDINAL}.${CMO_HEADLESS_SERVICE}"
     existing="${CMO_NODE_PREFIX}-0.${CMO_HEADLESS_SERVICE}"
     tries=0
     while [ "$tries" -lt 90 ]; do
-      if valkey-cli -h "$new" -p 6379 --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning PING | grep -q PONG; then
+      if valkey-cli -h "$new" -p 6379 --user "$mgr_user" -a "$mgr_pass" --no-auth-warning PING | grep -q PONG; then
         break
       fi
       tries=$((tries + 1))
@@ -74,7 +78,7 @@ data:
     fi
     if [ "$CMO_SCALE_ROLE" = "replica" ]; then
       primary="${CMO_NODE_PREFIX}-${CMO_SCALE_PRIMARY_ORDINAL}.${CMO_HEADLESS_SERVICE}"
-      valkey-cli -h "$existing" -p 6379 --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning CLUSTER NODES > /tmp/nodes
+      valkey-cli -h "$existing" -p 6379 --user "$mgr_user" -a "$mgr_pass" --no-auth-warning CLUSTER NODES > /tmp/nodes
       id=""
       while read -r node_id addr flags _; do
         case "$addr" in
@@ -89,25 +93,25 @@ data:
         echo "could not find primary ${primary}" >&2
         exit 1
       fi
-      valkey-cli --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning \
+      valkey-cli --user "$mgr_user" -a "$mgr_pass" --no-auth-warning \
         --cluster add-node "${new}:6379" "${existing}:6379" \
         --cluster-replica --cluster-primary-id "$id" --cluster-yes
     else
-      valkey-cli --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning \
+      valkey-cli --user "$mgr_user" -a "$mgr_pass" --no-auth-warning \
         --cluster add-node "${new}:6379" "${existing}:6379" --cluster-yes
       tries=0
       while [ "$tries" -lt 40 ]; do
-        if valkey-cli -h "$existing" -p 6379 --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning CLUSTER NODES | grep -q "$new"; then
-          if valkey-cli -h "$new" -p 6379 --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning CLUSTER INFO | grep -q 'cluster_state:ok'; then
+        if valkey-cli -h "$existing" -p 6379 --user "$mgr_user" -a "$mgr_pass" --no-auth-warning CLUSTER NODES | grep -q "$new"; then
+          if valkey-cli -h "$new" -p 6379 --user "$mgr_user" -a "$mgr_pass" --no-auth-warning CLUSTER INFO | grep -q 'cluster_state:ok'; then
             break
           fi
         fi
         tries=$((tries + 1))
         sleep 1
       done
-      valkey-cli --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning \
+      valkey-cli --user "$mgr_user" -a "$mgr_pass" --no-auth-warning \
         --cluster rebalance "${existing}:6379" --cluster-use-empty-primaries --cluster-yes
-      info="$(valkey-cli -h "$existing" -p 6379 --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning CLUSTER INFO || true)"
+      info="$(valkey-cli -h "$existing" -p 6379 --user "$mgr_user" -a "$mgr_pass" --no-auth-warning CLUSTER INFO || true)"
       printf '%s\n' "$info" | grep -q 'cluster_state:ok'
     fi
 {{- end }}

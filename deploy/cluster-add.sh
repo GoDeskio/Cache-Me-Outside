@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Add a live cluster node and, for a primary, rebalance slots onto it.
 #   ./cluster-add.sh primary
-#   ./cluster-add.sh replica cmo-cluster-0
+#   ./cluster-add.sh replica cache-me-outside-cluster-0
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -25,12 +25,13 @@ case "$role" in
         ;;
 esac
 
-if [[ ! -f .generated/state ]]; then
+state_file="$(cmo_state_file)"
+if [[ ! -f "$state_file" ]]; then
     echo "No cluster is recorded. Start one with ./up.sh cluster." >&2
     exit 1
 fi
-# shellcheck disable=SC1091
-source .generated/state
+# shellcheck disable=SC1090
+source "$state_file"
 if [[ "$topology" != "cluster" ]]; then
     echo "State is ${topology}, not cluster." >&2
     exit 1
@@ -43,7 +44,8 @@ found_of=0
 for spec in "${nodes[@]}"; do
     # shellcheck disable=SC2086
     set -- $spec
-    index="${1#cmo-cluster-}"
+    stem="$(cmo_member_name "cluster-")"
+    index="${1#"$stem"}"
     if ((index > max_index)); then
         max_index="$index"
     fi
@@ -72,7 +74,7 @@ if [[ -z "$keeper" ]]; then
 fi
 
 next=$((max_index + 1))
-name="cmo-cluster-${next}"
+name="$(cmo_member_name "cluster-${next}")"
 port=$((max_port + 1))
 bind="$CMO_BIND_ADDRESS"
 cmo_refuse_wildcard_bind "$bind" CMO_BIND_ADDRESS
@@ -87,12 +89,12 @@ nodes+=("${name} ${role} ${of} ${port} ${bind}")
         printf '  "%s"\n' "$spec"
     done
     echo ")"
-} > .generated/state
+} > "$state_file"
 
 # Keep the membership just written. A caller may still have CMO_RESET_TOPOLOGY=1
 # from the initial ./up.sh cluster.
 CMO_RESET_TOPOLOGY=0 ./render-topology.sh cluster
-cmo_dc -f .generated/compose.yml up -d --no-build --wait "$name"
+cmo_dc -f "$(cmo_compose_file)" up -d --no-build --wait "$name"
 cmo_wait_healthy "$name"
 
 agree_names=()

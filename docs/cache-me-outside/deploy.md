@@ -36,6 +36,8 @@ Other containers on the Compose network `cache-me-outside` can use the DNS name 
 
 Data is the named volume `cache-me-outside-data`, mounted at `/data` (AOF and RDB).
 
+The Compose project, network, and container prefix are `CMO_PROJECT`, `CMO_NETWORK`, and `CMO_NAME_PREFIX`. All three default to `cache-me-outside`. Generated compose files for Sentinel and cluster live in `deploy/.generated/<project>/`, so a second project does not share that state. `CMO_SUBNET` (for example `203.0.113.0/24` in documentation) pins the network this project creates. Leave it unset unless Docker's default pools are used up. A pool such as `192.168.0.0/20` can overlap the LAN and cut containers off from it.
+
 ## Optional proxy network
 
 If other stacks should reach the cache by name, create the external network once and add the override file:
@@ -54,7 +56,9 @@ docker compose -f docker-compose.yml -f docker-compose.proxy-net.yml up -d
 ## Stop
 
 ```bash
-./down.sh
+./down.sh                 # stop containers, keep volumes
+./down.sh --volumes       # also delete this project's volumes
+./down.sh --remove-orphans
 ```
 
-That removes the standalone, sentinel, cluster, and single-node containers and their volumes. `deploy/.env` is left in place.
+`./down.sh` stops the containers for the current `CMO_PROJECT` only, and deletes `deploy/.generated/<project>/`. Volumes stay unless you pass `--volumes`. Deleting volumes for the default project (`cache-me-outside`, or `CMO_PRODUCTION_PROJECT` when that was filled in because `CMO_PROJECT` was unset) also requires `--i-know` or an explicit `CMO_PROJECT`. `--remove-orphans` is not passed unless you ask for it. The script does not remove a container whose name belongs to a different prefix. `deploy/.env` is left in place. Test scripts call `./down.sh --volumes` only after selecting `cmo-test`, and they refuse the default project unless `--i-know` is passed. `cluster-remove.sh` deletes the drained container by name. It does not pass `--remove-orphans`, which would also delete a standalone container in the same project.

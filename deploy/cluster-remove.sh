@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Move slots off a primary, then delete the node. A replica is deleted directly.
 # A primary that still has replicas is refused; remove those replicas first.
-#   ./cluster-remove.sh cmo-cluster-3
+#   ./cluster-remove.sh cache-me-outside-cluster-3
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -14,12 +14,13 @@ if [[ -z "$name" ]]; then
     echo "Usage: ./cluster-remove.sh <container>" >&2
     exit 1
 fi
-if [[ ! -f .generated/state ]]; then
+state_file="$(cmo_state_file)"
+if [[ ! -f "$state_file" ]]; then
     echo "No cluster state." >&2
     exit 1
 fi
-# shellcheck disable=SC1091
-source .generated/state
+# shellcheck disable=SC1090
+source "$state_file"
 if [[ "$topology" != "cluster" ]]; then
     echo "State is ${topology}, not cluster." >&2
     exit 1
@@ -115,6 +116,9 @@ if [[ "$kind" == "primary" ]]; then
             exit 1
         fi
     fi
+    drained_primary=1
+else
+    drained_primary=0
 fi
 
 cmo_cluster_mgr "$keeper" del-node "${keeper}:6379" "$node_id" --cluster-yes
@@ -128,11 +132,31 @@ cmo_cluster_mgr "$keeper" del-node "${keeper}:6379" "$node_id" --cluster-yes
         printf '  "%s"\n' "$spec"
     done
     echo ")"
-} > .generated/state
+} > "$state_file"
 
 # Keep the membership just written. A caller may still have CMO_RESET_TOPOLOGY=1
 # from the initial ./up.sh cluster.
 CMO_RESET_TOPOLOGY=0 ./render-topology.sh cluster
-cmo_dc -f .generated/compose.yml up -d --no-build --remove-orphans
+# Remove only this container. `compose up --remove-orphans` would also delete
+# a standalone service that shares the project.
+docker rm -f "$name" >/dev/null
+# Do not recreate the nodes that are still serving. A recreate drops the
+# in-memory slot map until nodes.conf is loaded, and rebalance then refuses
+# to run because not every slot is covered.
+cmo_dc -f "$(cmo_compose_file)" up -d --no-build --no-recreate
 docker volume rm "${name}-data" >/dev/null 2>&1 || true
+
+if [[ "$drained_primary" -eq 1 ]]; then
+    remain=()
+    for spec in "${new_nodes[@]}"; do
+        # shellcheck disable=SC2086
+        set -- $spec
+        cmo_wait_healthy "$1"
+        remain+=("$1")
+    done
+    cmo_wait_cluster_agreement "${#remain[@]}" "${remain[@]}"
+    # The reshard above moved every slot onto one primary. Spread them again.
+    cmo_cluster_mgr "$keeper" rebalance "${keeper}:6379" \
+        --cluster-use-empty-primaries --cluster-yes
+fi
 echo "removed ${name}"

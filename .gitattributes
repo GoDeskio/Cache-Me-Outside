@@ -14,3 +14,7 @@ Dockerfile.* text eol=lf
 *.service text eol=lf
 deploy/** text eol=lf
 packaging/** text eol=lf
+Makefile text eol=lf
+**/Makefile text eol=lf
+src/** text eol=lf
+*.tcl text eol=lf

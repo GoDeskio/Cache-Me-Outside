@@ -70,7 +70,7 @@ The Job waits for that ordinal, `add-node`, and rebalances. `role=replica` also 
 
 Removing a shard is still the Docker script's drain (`CLUSTER` reshard until the node owns no slots, then del-node), run from a pod with `valkey-cli` against the in-cluster DNS names. Do not `kubectl delete` a primary that still owns slots.
 
-Sentinel scale is `sentinel.replicas` and `sentinel.count` on upgrade. A new data ordinal other than `*-0` starts as a replica of pod 0. After a failover, pod 0 may be a replica; Sentinel's runtime view is authoritative, and a Sentinel pod restart rewrites its config from the current primary host env (pod 0) and then follows whatever role that pod reports.
+Sentinel scale is `sentinel.replicas` and `sentinel.count` on upgrade. A new data ordinal other than `*-0` starts as a replica of pod 0. After a failover, pod 0 may be a replica. Sentinel writes `cmo-sentinel.conf` only when that file is missing and keeps it on an emptyDir at `/data`, so a container restart in the same pod keeps the replicas it has learned. A new pod starts again from the primary host env (pod 0) and then follows whatever role that pod reports. The Sentinel CPU limit is 1. A limit of 250m or less can pause the process into TILT and add about 30 seconds to failover.
 
 ## HPA
 
