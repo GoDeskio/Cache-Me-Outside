@@ -134,6 +134,7 @@ path = [
     "Dockerfile",
     ".dockerignore",
     "deploy/**",
+    "packaging/**",
     "docs/cache-me-outside/**",
     "tests/unit/cmo-version.tcl",
     ".github/workflows/cmo-ci.yml",

@@ -1,31 +1,30 @@
 #!/usr/bin/env bash
-# Start the single-node Cache-Me-Outside stack.
-# Refuses to publish the host port on every interface.
+# Start Cache-Me-Outside.
+#   ./up.sh                  standalone (default)
+#   ./up.sh sentinel         primary, replicas, and Sentinel
+#   ./up.sh cluster          sharded cluster, then bootstrap slots
+#   ./up.sh node             one node for a multi-host layout
+# Refuses to publish a host port on every interface.
 set -euo pipefail
 
 cd "$(dirname "$0")"
-
-if [[ ! -f .env ]]; then
-    echo "Missing deploy/.env." >&2
-    echo "Copy cache-me-outside.env.example to .env, replace both passwords, and chmod 600 .env." >&2
-    exit 1
-fi
-
-set -a
 # shellcheck disable=SC1091
-source ./.env
-set +a
+source ./lib.sh
 
-bind_address="${CMO_BIND_ADDRESS:-127.0.0.1}"
-case "$bind_address" in
-    "" | 0.0.0.0 | "::" | "*" | "[::]" | "0.0.0.0/0")
-        echo "Refusing to publish Cache-Me-Outside on all host interfaces (${bind_address})." >&2
-        echo "Set CMO_BIND_ADDRESS to 127.0.0.1 or one LAN address." >&2
-        exit 1
+topology="standalone"
+case "${1:-}" in
+    standalone | sentinel | cluster | node)
+        topology="$1"
+        shift
         ;;
 esac
+export CMO_TOPOLOGY="$topology"
 
-host_port="${CMO_HOST_PORT:-6379}"
+cmo_load_env
+cmo_refuse_wildcard_bind "${CMO_BIND_ADDRESS}" CMO_BIND_ADDRESS
+cmo_refuse_generic_alias "${CMO_NETWORK_ALIAS:-cache-me-outside}"
+
+host_port="${CMO_HOST_PORT}"
 case "$host_port" in
     '' | *[!0-9]*)
         echo "CMO_HOST_PORT must be numeric." >&2
@@ -37,4 +36,30 @@ if ((host_port < 1 || host_port > 65535)); then
     exit 1
 fi
 
-exec docker compose up -d --build --wait "$@"
+# Per-node overrides, when set, are checked the same way as the default.
+while IFS= read -r name; do
+    [[ -z "$name" ]] && continue
+    cmo_refuse_wildcard_bind "${!name}" "$name"
+done < <(compgen -A variable | grep -E '^CMO_BIND_ADDRESS_' || true)
+
+if [[ "$topology" == "node" ]]; then
+    if [[ -z "${CMO_ANNOUNCE_IP:-}" ]]; then
+        echo "up.sh node requires CMO_ANNOUNCE_IP (one address other hosts can reach)." >&2
+        echo "Do not use 0.0.0.0." >&2
+        exit 1
+    fi
+    cmo_refuse_wildcard_bind "${CMO_ANNOUNCE_IP}" CMO_ANNOUNCE_IP
+    cmo_dc -f docker-compose.node.yml up -d --build --wait "$@"
+    exit
+fi
+
+if [[ "$topology" == "sentinel" || "$topology" == "cluster" ]]; then
+    ./render-topology.sh "$topology"
+    cmo_dc -f .generated/compose.yml up -d --build --wait "$@"
+    if [[ "$topology" == "cluster" ]]; then
+        ./cluster-bootstrap.sh
+    fi
+    exit 0
+fi
+
+cmo_dc -f docker-compose.yml up -d --build --wait "$@"

@@ -1,0 +1,7 @@
+apiVersion: v2
+name: cache-me-outside
+description: Cache-Me-Outside (Valkey) for Kubernetes
+type: application
+version: 0.3.0
+appVersion: "255.255.255-cmo"
+kubeVersion: ">=1.25.0-0"

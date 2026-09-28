@@ -18,7 +18,11 @@ There is no password in git. `deploy/cache-me-outside.env.example` contains the 
 | app (`CMO_APP_USER`) | `+@all -@dangerous -@admin`, plus an explicit deny for `FLUSHALL`, `FLUSHDB`, `DEBUG`, `CONFIG`, `KEYS`, `SHUTDOWN`, module load, ACL changes, replication, migrate, restore, sort, failover, `BGSAVE`, `BGREWRITEAOF`, `SAVE`, `MONITOR`, `SYNC`, and `PSYNC` |
 | admin (`CMO_ADMIN_USER`) | `+@all` |
 
-The app user can `SET`, `GET`, `DEL`, `PING`, `SCAN`, and the usual structure commands. It cannot read `INFO` (`INFO` is in `@dangerous`) and cannot change config. Use the admin user for `INFO`, `CONFIG`, and snapshots.
+The app user can `SET`, `GET`, `DEL`, `PING`, `SCAN`, and the usual structure commands. It cannot read `INFO` (`INFO` is in `@dangerous`) and cannot change config. Use the admin user for `INFO`, `CONFIG`, snapshots, replication, and cluster administration.
+
+On Sentinel processes the app user is also allowed a short list of read-only discovery commands (`SENTINEL GET-PRIMARY-ADDR-BY-NAME` and the replica/sentinel listings) so a sentinel-aware client can find the primary. Those command names are not registered on data nodes, so the data-node ACL does not list them. `SENTINEL FAILOVER` and the other Sentinel admin subcommands stay denied. Cluster clients can run `CLUSTER SLOTS` and `CLUSTER NODES` (those are not admin commands). `CLUSTER MEET`, `CLUSTER SETSLOT`, and the other admin cluster commands stay denied.
+
+Replicas and cluster nodes authenticate replication as the admin user (`masteruser` / `masterauth`). That password stays in the container environment and in a mode `0600` file under `/tmp`, not in the image and not in git.
 
 `enable-debug-command` stays at its Valkey default, `no`, so `DEBUG` is refused for every user, including admin. The app ACL also removes `DEBUG`, which still applies if an operator later turns the command on.
 

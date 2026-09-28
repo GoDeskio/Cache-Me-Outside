@@ -17,10 +17,13 @@ services:
     image: cache-me-outside:local
     container_name: cache-me-outside
     env_file:
-      - .env
+      - path: ${CMO_ENV_FILE:-.env}
+        required: false
     environment:
+      CMO_ROLE: standalone
       CMO_MAXMEMORY: ${CMO_MAXMEMORY:-256mb}
       CMO_MAXMEMORY_POLICY: ${CMO_MAXMEMORY_POLICY:-allkeys-lru}
+      CMO_IO_THREADS: ${CMO_IO_THREADS:-1}
       CMO_PORT: ${CMO_PORT:-6379}
     ports:
       - "${CMO_BIND_ADDRESS:-127.0.0.1}:${CMO_HOST_PORT:-6379}:6379"
@@ -32,6 +35,7 @@ services:
     security_opt:
       - no-new-privileges:true
     mem_limit: ${CMO_CONTAINER_MEMORY:-512m}
+    cpus: "${CMO_CPUS:-1.0}"
     networks:
       cmo: {}
     logging:

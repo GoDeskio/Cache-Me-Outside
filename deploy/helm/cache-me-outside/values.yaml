@@ -1,0 +1,136 @@
+# topology: standalone, sentinel, or cluster.
+topology: standalone
+
+image:
+  repository: cache-me-outside
+  tag: local
+  pullPolicy: IfNotPresent
+
+# Create the Secret out of band. This chart does not generate passwords.
+#   kubectl create secret generic cache-me-outside-auth \
+#     --from-literal=admin-user=admin \
+#     --from-literal=admin-password='<16+ chars>' \
+#     --from-literal=app-user=app \
+#     --from-literal=app-password='<different 16+ chars>'
+auth:
+  existingSecret: cache-me-outside-auth
+  adminUserKey: admin-user
+  adminPasswordKey: admin-password
+  appUserKey: app-user
+  appPasswordKey: app-password
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+# Keep maxmemory at or below half the memory limit. Forked rewrites need the rest.
+maxmemory: 256mb
+maxmemoryPolicy: allkeys-lru
+# 1 uses the main thread only. Raise it only when a core is busy and at least
+# one core is left for the rest of the node.
+ioThreads: 1
+
+persistence:
+  size: 1Gi
+  # Empty uses the cluster default StorageClass. Set this on k3s, kind, or a
+  # managed cluster when the default class is not the one you want.
+  storageClass: ""
+  accessMode: ReadWriteOnce
+
+# Preferred spread. ScheduleAnyway so a one-node kind or k3s cluster still
+# places every pod. A multi-node cluster separates shards and replicas.
+scheduling:
+  spread: true
+
+probes:
+  readiness:
+    initialDelaySeconds: 3
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 12
+  liveness:
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 6
+
+# preStop runs SHUTDOWN SAVE on data pods so the AOF/RDB is flushed.
+gracefulShutdown:
+  enabled: true
+  terminationGracePeriodSeconds: 30
+
+# Restricts client access to pods in this release and pods labeled
+# cache-me-outside.io/client=true. DNS is allowed out. Disable on a cluster
+# that does not enforce NetworkPolicy.
+networkPolicy:
+  enabled: true
+
+# Optional Prometheus scrape. Off by default. The exporter uses the admin
+# password because the app user cannot run INFO. ServiceMonitor needs the
+# Prometheus operator CRDs; kubeconform skips that kind.
+metrics:
+  exporter:
+    enabled: false
+    image:
+      repository: oliver006/redis_exporter
+      tag: v1.67.0
+      pullPolicy: IfNotPresent
+    port: 9121
+    resources:
+      requests:
+        cpu: 20m
+        memory: 32Mi
+      limits:
+        cpu: 200m
+        memory: 64Mi
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+
+# Host ports are off. Turning them on publishes on one address, never every NIC.
+hostPort:
+  enabled: false
+  address: 127.0.0.1
+  clientPort: 6379
+  busPort: 16379
+
+sentinel:
+  # Data replicas in addition to the initial primary (pod 0).
+  replicas: 2
+  count: 3
+  quorum: 2
+  downAfterMilliseconds: 5000
+  failoverTimeout: 60000
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
+
+cluster:
+  primaries: 3
+  replicasPerPrimary: 1
+  nodeTimeout: 5000
+  # hostname uses in-cluster DNS. ip publishes hostIP and requires hostPort,
+  # which is how a pod joins VM or container nodes that are not in this DNS.
+  announce:
+    mode: hostname
+  # After scaling the StatefulSet, enable this once so the new ordinal joins.
+  scaleJob:
+    enabled: false
+    ordinal: 3
+    role: primary
+    primaryOrdinal: 0
+
+pdb:
+  maxUnavailable: 1
+
+# HorizontalPodAutoscaler is intentionally absent. See docs/cache-me-outside/kubernetes.md.

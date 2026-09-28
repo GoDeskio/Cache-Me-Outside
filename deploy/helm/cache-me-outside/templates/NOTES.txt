@@ -1,0 +1,15 @@
+Cache-Me-Outside topology: {{ .Values.topology }}
+
+The auth Secret {{ .Values.auth.existingSecret }} must already exist. This chart does not create passwords.
+
+Standalone clients use the Service {{ include "cmo.fullname" . }} port 6379.
+Sentinel clients use {{ include "cmo.fullname" . }}-sentinel port 26379 and a sentinel-aware client.
+Cluster clients use any data pod DNS name under {{ include "cmo.headless" . }} with a cluster-aware client.
+
+Horizontal pod autoscaling is not installed. Adding or deleting cache pods does not move slots, so an autoscaler would either leave an empty node or drop a shard. Scale the StatefulSet, then run the cluster scale Job. See the scaling guide.
+
+Rolling upgrades replace one pod at a time. Data pods run SHUTDOWN SAVE before they exit.
+
+When the NetworkPolicy is enabled, client pods need the label cache-me-outside.io/client=true. Pods in this release can already reach each other.
+
+Service names are release-specific. This chart does not create a Service named redis or valkey.

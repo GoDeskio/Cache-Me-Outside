@@ -1,5 +1,9 @@
 # Optional: attach the cache to an external Docker network named proxy-net
-# so other containers can reach it as cache-me-outside.
+# so other containers can reach it by a project-specific alias.
+#
+# The alias defaults to cache-me-outside. Set CMO_NETWORK_ALIAS to change it.
+# Do not use redis or valkey: those names are generic and will steal DNS from
+# another stack on the same network. deploy/up.sh rejects them.
 #
 # The network must already exist. This file is not applied by deploy/up.sh.
 #
@@ -11,9 +15,7 @@ services:
     networks:
       proxy-net:
         aliases:
-          - cache-me-outside
-          - valkey
-          - redis
+          - ${CMO_NETWORK_ALIAS:-cache-me-outside}
 
 networks:
   proxy-net:
