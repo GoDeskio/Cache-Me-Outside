@@ -140,10 +140,21 @@ CMO_RESET_TOPOLOGY=0 ./render-topology.sh cluster
 # Remove only this container. `compose up --remove-orphans` would also delete
 # a standalone service that shares the project.
 docker rm -f "$name" >/dev/null
-cmo_dc -f "$(cmo_compose_file)" up -d --no-build
+# Do not recreate the nodes that are still serving. A recreate drops the
+# in-memory slot map until nodes.conf is loaded, and rebalance then refuses
+# to run because not every slot is covered.
+cmo_dc -f "$(cmo_compose_file)" up -d --no-build --no-recreate
 docker volume rm "${name}-data" >/dev/null 2>&1 || true
 
 if [[ "$drained_primary" -eq 1 ]]; then
+    remain=()
+    for spec in "${new_nodes[@]}"; do
+        # shellcheck disable=SC2086
+        set -- $spec
+        cmo_wait_healthy "$1"
+        remain+=("$1")
+    done
+    cmo_wait_cluster_agreement "${#remain[@]}" "${remain[@]}"
     # The reshard above moved every slot onto one primary. Spread them again.
     cmo_cluster_mgr "$keeper" rebalance "${keeper}:6379" \
         --cluster-use-empty-primaries --cluster-yes
