@@ -56,7 +56,9 @@ docker compose -f docker-compose.yml -f docker-compose.proxy-net.yml up -d
 ## Stop
 
 ```bash
-./down.sh
+./down.sh                 # stop containers, keep volumes
+./down.sh --volumes       # also delete this project's volumes
+./down.sh --remove-orphans
 ```
 
-That removes the containers and volumes for the current `CMO_PROJECT` only, and deletes `deploy/.generated/<project>/`. It does not remove a container whose name belongs to a different prefix. `deploy/.env` is left in place. Test scripts call this only after selecting `cmo-test`, and they refuse the default project unless `--i-know` is passed. `cluster-remove.sh` deletes the drained container by name. It does not pass `--remove-orphans`, which would also delete a standalone container in the same project.
+`./down.sh` stops the containers for the current `CMO_PROJECT` only, and deletes `deploy/.generated/<project>/`. Volumes stay unless you pass `--volumes`. Deleting volumes for the default project (`cache-me-outside`, or `CMO_PRODUCTION_PROJECT` when that was filled in because `CMO_PROJECT` was unset) also requires `--i-know` or an explicit `CMO_PROJECT`. `--remove-orphans` is not passed unless you ask for it. The script does not remove a container whose name belongs to a different prefix. `deploy/.env` is left in place. Test scripts call `./down.sh --volumes` only after selecting `cmo-test`, and they refuse the default project unless `--i-know` is passed. `cluster-remove.sh` deletes the drained container by name. It does not pass `--remove-orphans`, which would also delete a standalone container in the same project.

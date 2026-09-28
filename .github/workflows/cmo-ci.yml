@@ -74,8 +74,16 @@ jobs:
           test "$fail_rc" -ne 0
           test "$scale_rc" -ne 0
           docker exec cache-me-outside cat /data/marker | grep -qx keep-me
+          # A bare volume wipe must refuse the default project and leave the marker.
+          set +e
+          ./down.sh --volumes
+          vol_rc=$?
+          set -e
+          test "$vol_rc" -ne 0
+          docker exec cache-me-outside cat /data/marker | grep -qx keep-me
           # A test-project down must not remove the stand-in volume or container.
           env CMO_PROJECT=cmo-test CMO_NETWORK=cmo-test CMO_NAME_PREFIX=cmo-test ./down.sh
+          env CMO_PROJECT=cmo-test CMO_NETWORK=cmo-test CMO_NAME_PREFIX=cmo-test ./down.sh --volumes
           docker exec cache-me-outside cat /data/marker | grep -qx keep-me
           echo "CMO_PROJECT=cmo-test" >> "$GITHUB_ENV"
           echo "CMO_NETWORK=cmo-test" >> "$GITHUB_ENV"
@@ -99,21 +107,47 @@ jobs:
           test "$before_max" = "$after_max"
           CMO_BENCH_REQUESTS=10000 CMO_BENCH_CLIENTS=10 ./bench.sh
           docker image ls cache-me-outside:local
-          ./down.sh
+          ./down.sh --volumes
 
-      - name: Sentinel failover
+      - name: Sentinel failover under CPU contention
         run: |
+          set -euo pipefail
           cd deploy
+          umask 077
+          if ! grep -q '^CMO_REPL_USER=' .env; then
+            cat >> .env <<EOF
+          CMO_REPL_USER=cmo_repl
+          CMO_REPL_PASSWORD=$(openssl rand -hex 24)
+          CMO_SENTINEL_USER=cmo_sentinel
+          CMO_SENTINEL_PASSWORD=$(openssl rand -hex 24)
+          CMO_CLUSTER_USER=cmo_cluster
+          CMO_CLUSTER_PASSWORD=$(openssl rand -hex 24)
+          EOF
+          fi
+          chmod 600 .env
           CMO_REPLICAS=1 CMO_SENTINEL_DOWN_AFTER_MS=2000 CMO_SENTINEL_FAILOVER_TIMEOUT=20000 \
             ./smoke.sh --mutate sentinel
-          ./sentinel-failover.sh --no-up
-          ./down.sh
+          docker rm -f cmo-cpu-stress >/dev/null 2>&1 || true
+          cores="$(nproc)"
+          stress_cpus=$((cores / 2))
+          if [[ "$stress_cpus" -lt 1 ]]; then
+            stress_cpus=1
+          fi
+          docker run -d --name cmo-cpu-stress --cpus "$stress_cpus" alpine:3.20 \
+            sh -c 'n=0; while [ "$n" -lt 4 ]; do n=$((n + 1)); while true; do :; done & done; wait'
+          cleanup() { docker rm -f cmo-cpu-stress >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          CMO_FAILOVER_MAX_SECONDS=30 ./sentinel-failover.sh --no-up
+          ./down.sh --volumes
 
-      - name: Cluster scale-out
+      - name: Cluster scale-out with dedicated users
         run: |
           cd deploy
+          grep -q '^CMO_REPL_USER=' .env
+          grep -q '^CMO_SENTINEL_USER=' .env
+          grep -q '^CMO_CLUSTER_USER=' .env
           CMO_CLUSTER_PRIMARIES=3 CMO_CLUSTER_REPLICAS=0 ./cluster-scale-test.sh
-          ./down.sh
+          ./down.sh --volumes
 
       - name: Default-project stand-in is still intact
         run: |

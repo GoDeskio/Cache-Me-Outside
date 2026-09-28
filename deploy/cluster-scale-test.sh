@@ -15,7 +15,7 @@ export CMO_RESET_TOPOLOGY=1
 # Select cmo-test before down.sh. A production project is refused here.
 cmo_prepare_test_identity "$@"
 
-./down.sh
+./down.sh --volumes
 know=()
 if [[ "${CMO_TEST_ALLOW:-}" == "1" ]]; then
     know=(--i-know)

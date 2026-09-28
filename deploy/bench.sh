@@ -107,6 +107,14 @@ EOF
 # The stock image runs as uid 999 and has to read this mount. The password
 # is a throwaway, so the file is world-readable. It is not the app password.
 chmod 644 "${stock_dir}/stock.conf"
+# The client reads the password from the environment, not from `docker run`
+# arguments. valkey-benchmark does not read VALKEYCLI_AUTH, so the wrapper
+# passes -a after the process has started.
+cat > "${stock_dir}/run-bench.sh" <<'EOF'
+#!/bin/sh
+exec valkey-benchmark --user "$CMO_BENCH_USER" -a "$CMO_BENCH_PASSWORD" "$@"
+EOF
+chmod 755 "${stock_dir}/run-bench.sh"
 docker rm -f "$upstream_name" >/dev/null 2>&1 || true
 docker run -d --name "$upstream_name" \
     --network "$CMO_NETWORK" \
@@ -141,10 +149,19 @@ run_bench() {
     # The client is its own container so it does not share the server CPU cap.
     # The app user cannot CONFIG. valkey-benchmark warns and continues.
     # Drop that one line. The save/appendonly values above were read as admin.
-    docker run --rm --network "$CMO_NETWORK" --entrypoint valkey-benchmark \
+    # The password stays in an env file. It is not an argument to docker run.
+    umask 077
+    cat > "${stock_dir}/bench.env" <<EOF
+CMO_BENCH_USER=${user}
+CMO_BENCH_PASSWORD=${pass}
+EOF
+    chmod 600 "${stock_dir}/bench.env"
+    docker run --rm --network "$CMO_NETWORK" \
+        --env-file "${stock_dir}/bench.env" \
+        -v "${stock_dir}/run-bench.sh:/tmp/run-bench.sh:ro" \
+        --entrypoint /tmp/run-bench.sh \
         cache-me-outside:local \
         -h "$host" -p "$port" \
-        --user "$user" -a "$pass" \
         -t set,get -n "$requests" -c "$clients" -d 64 --threads 2 \
         2>&1 | sed '/^WARNING: Could not fetch server CONFIG$/d'
 }
@@ -173,6 +190,7 @@ run_bench() {
     echo "ACL does not: Cache-Me-Outside uses the ${bench_user} user. Stock Valkey uses"
     echo "requirepass on the default user, which can run every command including CONFIG."
     echo "The stock password is a throwaway in a mounted config file, not the app password."
+    echo "The benchmark client reads its password from an env file, not from the docker run arguments."
     echo "Set CMO_BENCH_USER=admin to benchmark Cache-Me-Outside as the admin user so the"
     echo "client can fetch CONFIG itself. The default stays the app user."
     echo

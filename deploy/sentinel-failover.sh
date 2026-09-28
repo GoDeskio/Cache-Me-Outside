@@ -102,12 +102,35 @@ cmo_app "$primary" SET cmo:failover before >/dev/null
 old_ip="$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$primary")"
 [[ -n "$old_ip" ]] || fail "could not read the primary address"
 
+if [[ -n "${CMO_FAILOVER_MAX_SECONDS:-}" ]]; then
+    if [[ ! "$CMO_FAILOVER_MAX_SECONDS" =~ ^[0-9]+$ || "$CMO_FAILOVER_MAX_SECONDS" -lt 1 ]]; then
+        echo "CMO_FAILOVER_MAX_SECONDS must be a positive number of seconds" >&2
+        exit 1
+    fi
+fi
+
 # unless-stopped would bring the primary back and race the election.
 docker update --restart=no "$primary" >/dev/null
 docker kill "$primary" >/dev/null
+kill_started="$(date +%s)"
+
+failover_over_budget() {
+    [[ -n "${CMO_FAILOVER_MAX_SECONDS:-}" ]] || return 1
+    local now elapsed_now
+    now="$(date +%s)"
+    elapsed_now="$((now - kill_started))"
+    [[ "$elapsed_now" -ge "$CMO_FAILOVER_MAX_SECONDS" ]]
+}
 
 new_addr=""
-for _i in $(seq 1 90); do
+promote_limit=90
+if [[ -n "${CMO_FAILOVER_MAX_SECONDS:-}" ]]; then
+    promote_limit="$CMO_FAILOVER_MAX_SECONDS"
+fi
+for _i in $(seq 1 "$promote_limit"); do
+    if failover_over_budget; then
+        break
+    fi
     addr="$(cmo_admin_port "${sentinels[0]}" "${CMO_SENTINEL_PORT}" SENTINEL GET-PRIMARY-ADDR-BY-NAME "$CMO_SENTINEL_MASTER" 2>/dev/null || true)"
     new_addr="$(printf '%s\n' "$addr" | head -n 1 | tr -d '\r')"
     if [[ -n "$new_addr" && "$new_addr" != "$old_ip" && "$new_addr" != "$primary" ]]; then
@@ -133,7 +156,14 @@ done
 [[ -n "$promoted" ]] || fail "new primary address ${new_addr} did not match a replica"
 
 wrote=0
-for _i in $(seq 1 30); do
+write_limit=30
+if [[ -n "${CMO_FAILOVER_MAX_SECONDS:-}" ]]; then
+    write_limit="$CMO_FAILOVER_MAX_SECONDS"
+fi
+for _i in $(seq 1 "$write_limit"); do
+    if failover_over_budget; then
+        break
+    fi
     if cmo_app "$promoted" SET cmo:failover after >/dev/null 2>&1; then
         wrote=1
         break
@@ -141,6 +171,10 @@ for _i in $(seq 1 30); do
     sleep 1
 done
 [[ "$wrote" -eq 1 ]] || fail "promoted node ${promoted} did not accept a write"
+elapsed="$(($(date +%s) - kill_started))"
+if [[ -n "${CMO_FAILOVER_MAX_SECONDS:-}" && "$elapsed" -gt "$CMO_FAILOVER_MAX_SECONDS" ]]; then
+    fail "failover took ${elapsed}s (limit ${CMO_FAILOVER_MAX_SECONDS}s)"
+fi
 got="$(cmo_app "$promoted" GET cmo:failover | tr -d '\r')"
 [[ "$got" == "after" ]] || fail "promoted node returned '${got}'"
 
@@ -159,4 +193,4 @@ case "$denied" in
     *) fail "app user was allowed to run SENTINEL FAILOVER: ${denied}" ;;
 esac
 
-echo "failover: ok (sentinel promoted ${promoted}, writes resumed, old primary is down)"
+echo "failover: ok (sentinel promoted ${promoted} in ${elapsed}s, writes resumed, old primary is down)"

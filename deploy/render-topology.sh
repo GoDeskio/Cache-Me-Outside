@@ -91,7 +91,7 @@ fi
 # shellcheck disable=SC1090
 source "$state"
 if [[ "$topology" != "$requested" ]]; then
-    echo "$(cmo_state_file) is a ${topology} topology. Run ./down.sh or CMO_RESET_TOPOLOGY=1 ./up.sh ${requested}." >&2
+    echo "$(cmo_state_file) is a ${topology} topology. Run ./down.sh --volumes or CMO_RESET_TOPOLOGY=1 ./up.sh ${requested}." >&2
     exit 1
 fi
 

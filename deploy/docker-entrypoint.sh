@@ -286,23 +286,61 @@ acl_file="${CMO_RUNTIME_DIR}/cmo-users.acl"
     fi
     if [ -n "$cluster_user" ] && [ "$CMO_ROLE" != "sentinel" ]; then
         # Tooling user for valkey-cli --cluster. The cluster bus is not this account.
-        printf '%s\n' "user ${cluster_user} on >${cluster_pass} ~* &* +cluster +migrate +info +ping +asking +readonly +readwrite +config|get"
+        # MIGRATE SELECTs, then the source connects to the destination as this
+        # same user (AUTH2) and runs RESTORE / RESTORE-ASKING. Adding a primary
+        # also copies functions (FUNCTION DUMP, LIST, and RESTORE).
+        printf '%s\n' "user ${cluster_user} on >${cluster_pass} ~* &* +select +restore +restore-asking +migrate +cluster +asking +readonly +readwrite +ping +info +function|dump +function|list +function|restore +config|get"
     fi
 } > "$acl_file"
 chmod 600 "$acl_file"
+
+# Hostnames are opt-in. The default stores IPs so a dead container's name
+# cannot block Sentinel in DNS. A lookup longer than about 2s trips TILT.
+sentinel_hostnames="no"
+case "${CMO_SENTINEL_ANNOUNCE_HOSTNAMES:-no}" in
+    yes) sentinel_hostnames="yes" ;;
+    no) sentinel_hostnames="no" ;;
+    *)
+        echo "cache-me-outside: CMO_SENTINEL_ANNOUNCE_HOSTNAMES must be yes or no" >&2
+        exit 1
+        ;;
+esac
+
+# Address Docker assigned to this container, from /etc/hosts. Empty if unknown.
+cmo_container_ip() {
+    host_name=""
+    if [ -r /etc/hostname ]; then
+        host_name="$(tr -d '[:space:]' < /etc/hostname)"
+    fi
+    if [ -z "$host_name" ]; then
+        host_name="$(hostname 2>/dev/null || true)"
+    fi
+    case "$host_name" in
+        "" | localhost | 127.0.0.1) return 0 ;;
+    esac
+    if ! command -v getent >/dev/null 2>&1; then
+        return 0
+    fi
+    getent hosts "$host_name" | awk '$1 != "127.0.0.1" && $1 != "::1" { print $1; exit }'
+}
 
 if [ "$CMO_ROLE" = "sentinel" ]; then
     : "${CMO_PRIMARY_HOST:?Set CMO_PRIMARY_HOST for a sentinel}"
     : "${CMO_PRIMARY_PORT:=6379}"
     umask 077
+    # glibc waits 5s per attempt by default. That stall is enough to enter TILT
+    # and hold a failover for tens of seconds. One short attempt is enough.
+    if [ -z "${RES_OPTIONS:-}" ]; then
+        export RES_OPTIONS="timeout:1 attempts:1"
+    fi
     # Monitor the address resolved at start. A killed container drops out of
     # Docker DNS, and Sentinel will not fail over while it is still trying to
-    # resolve that name. Replicas can still be reached by hostname.
+    # resolve that name. The default is to keep the IP and not resolve again.
     if command -v getent >/dev/null 2>&1; then
         resolved=""
         try=0
         while [ "$try" -lt 30 ]; do
-            resolved="$(getent hosts "$CMO_PRIMARY_HOST" | awk '{ print $1; exit }')"
+            resolved="$(getent hosts "$CMO_PRIMARY_HOST" | awk '$1 != "127.0.0.1" && $1 != "::1" { print $1; exit }')"
             if [ -n "$resolved" ]; then
                 CMO_PRIMARY_HOST="$resolved"
                 break
@@ -311,16 +349,78 @@ if [ "$CMO_ROLE" = "sentinel" ]; then
             sleep 1
         done
     fi
+    case "$CMO_PRIMARY_HOST" in
+        [0-9]*.[0-9]*.[0-9]*.[0-9]*) ;;
+        *)
+            echo "cache-me-outside: could not resolve CMO_PRIMARY_HOST to an address; Sentinel will monitor ${CMO_PRIMARY_HOST}" >&2
+            ;;
+    esac
     # Sentinel rewrites this file as it learns replicas. Overwriting it on
     # every start drops that list until the next discovery pass, and a
     # failover in that window fails with "no good replica". A later start
-    # only refreshes the monitored primary address, because a container
-    # restart can change that IP while the saved replica names stay valid.
+    # refreshes the monitored primary address and the auth lines, and leaves
+    # the learned replica lines in place. Auth is rewritten so a password
+    # change in the environment replaces the secret stored on the volume.
     sentinel_conf="${CMO_RUNTIME_DIR}/cmo-sentinel.conf"
     if [ -s "$sentinel_conf" ]; then
-        awk -v name="$CMO_SENTINEL_MASTER" -v ip="$CMO_PRIMARY_HOST" '
+        awk -v name="$CMO_SENTINEL_MASTER" -v ip="$CMO_PRIMARY_HOST" \
+            -v user="$sentinel_user" -v pass="$sentinel_pass" \
+            -v down="$CMO_SENTINEL_DOWN_AFTER_MS" -v failover="$CMO_SENTINEL_FAILOVER_TIMEOUT" \
+            -v hostnames="$sentinel_hostnames" -v acl="$acl_file" '
             $1 == "sentinel" && $2 == "monitor" && $3 == name { $4 = ip }
+            $1 == "aclfile" { print "aclfile " acl; seen_acl = 1; next }
+            $1 == "sentinel" && $2 == "auth-user" && $3 == name {
+                print "sentinel auth-user " name " " user
+                seen_auth_user = 1
+                next
+            }
+            $1 == "sentinel" && $2 == "auth-pass" && $3 == name {
+                print "sentinel auth-pass " name " " pass
+                seen_auth_pass = 1
+                next
+            }
+            $1 == "sentinel" && $2 == "down-after-milliseconds" && $3 == name {
+                print "sentinel down-after-milliseconds " name " " down
+                seen_down = 1
+                next
+            }
+            $1 == "sentinel" && $2 == "failover-timeout" && $3 == name {
+                print "sentinel failover-timeout " name " " failover
+                seen_fail = 1
+                next
+            }
+            $1 == "sentinel" && $2 == "resolve-hostnames" {
+                print "sentinel resolve-hostnames " hostnames
+                seen_resolve = 1
+                next
+            }
+            $1 == "sentinel" && $2 == "announce-hostnames" {
+                print "sentinel announce-hostnames " hostnames
+                seen_announce = 1
+                next
+            }
+            $1 == "sentinel" && $2 == "sentinel-user" {
+                print "sentinel sentinel-user " user
+                seen_suser = 1
+                next
+            }
+            $1 == "sentinel" && $2 == "sentinel-pass" {
+                print "sentinel sentinel-pass " pass
+                seen_spass = 1
+                next
+            }
             { print }
+            END {
+                if (!seen_acl) print "aclfile " acl
+                if (!seen_auth_user) print "sentinel auth-user " name " " user
+                if (!seen_auth_pass) print "sentinel auth-pass " name " " pass
+                if (!seen_down) print "sentinel down-after-milliseconds " name " " down
+                if (!seen_fail) print "sentinel failover-timeout " name " " failover
+                if (!seen_resolve) print "sentinel resolve-hostnames " hostnames
+                if (!seen_announce) print "sentinel announce-hostnames " hostnames
+                if (!seen_suser) print "sentinel sentinel-user " user
+                if (!seen_spass) print "sentinel sentinel-pass " pass
+            }
         ' "$sentinel_conf" > "${sentinel_conf}.new"
         mv "${sentinel_conf}.new" "$sentinel_conf"
         chmod 600 "$sentinel_conf"
@@ -340,8 +440,8 @@ if [ "$CMO_ROLE" = "sentinel" ]; then
             printf '%s\n' "sentinel down-after-milliseconds ${CMO_SENTINEL_MASTER} ${CMO_SENTINEL_DOWN_AFTER_MS}"
             printf '%s\n' "sentinel failover-timeout ${CMO_SENTINEL_MASTER} ${CMO_SENTINEL_FAILOVER_TIMEOUT}"
             printf '%s\n' "sentinel parallel-syncs ${CMO_SENTINEL_MASTER} ${CMO_SENTINEL_PARALLEL_SYNCS}"
-            printf '%s\n' "sentinel resolve-hostnames yes"
-            printf '%s\n' "sentinel announce-hostnames yes"
+            printf '%s\n' "sentinel resolve-hostnames ${sentinel_hostnames}"
+            printf '%s\n' "sentinel announce-hostnames ${sentinel_hostnames}"
             printf '%s\n' "sentinel sentinel-user ${sentinel_user}"
             printf '%s\n' "sentinel sentinel-pass ${sentinel_pass}"
             if [ -n "${CMO_ANNOUNCE_IP:-}" ]; then
@@ -400,12 +500,21 @@ sed \
         if [ -n "${CMO_ANNOUNCE_IP:-}" ]; then
             printf '%s\n' "replica-announce-ip ${CMO_ANNOUNCE_IP}"
             printf '%s\n' "replica-announce-port ${CMO_ANNOUNCE_PORT:-${CMO_PORT}}"
-        else
-            # A Docker restart can hand the container a new IP. Announce the
-            # hostname so Sentinel's saved replica address still resolves.
+        elif [ "$sentinel_hostnames" = "yes" ]; then
             announced="$(hostname 2>/dev/null || true)"
             case "$announced" in
                 "" | localhost | 127.0.0.1) ;;
+                *)
+                    printf '%s\n' "replica-announce-ip ${announced}"
+                    printf '%s\n' "replica-announce-port ${CMO_ANNOUNCE_PORT:-${CMO_PORT}}"
+                    ;;
+            esac
+        else
+            # Announce the address Docker assigned. Sentinel stores that IP, so
+            # failover does not wait on DNS after this container's name is gone.
+            announced="$(cmo_container_ip || true)"
+            case "$announced" in
+                "") ;;
                 *)
                     printf '%s\n' "replica-announce-ip ${announced}"
                     printf '%s\n' "replica-announce-port ${CMO_ANNOUNCE_PORT:-${CMO_PORT}}"
