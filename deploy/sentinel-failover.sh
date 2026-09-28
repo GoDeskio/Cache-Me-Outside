@@ -85,7 +85,8 @@ for _i in $(seq 1 90); do
     for sentinel in "${sentinels[@]}"; do
         listing="$(cmo_admin_port "$sentinel" "${CMO_SENTINEL_PORT}" SENTINEL REPLICAS "$CMO_SENTINEL_MASTER" 2>/dev/null || true)"
         for name in "${replicas[@]}"; do
-            if ! grep -Fq "$name" <<< "$listing"; then
+            ip="$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$name" 2>/dev/null || true)"
+            if ! grep -Fq "$name" <<< "$listing" && { [[ -z "$ip" ]] || ! grep -Fq "$ip" <<< "$listing"; }; then
                 known=0
             fi
         done

@@ -295,27 +295,36 @@ if [ "$CMO_ROLE" = "sentinel" ]; then
     : "${CMO_PRIMARY_HOST:?Set CMO_PRIMARY_HOST for a sentinel}"
     : "${CMO_PRIMARY_PORT:=6379}"
     umask 077
+    # Monitor the address resolved at start. A killed container drops out of
+    # Docker DNS, and Sentinel will not fail over while it is still trying to
+    # resolve that name. Replicas can still be reached by hostname.
+    if command -v getent >/dev/null 2>&1; then
+        resolved=""
+        try=0
+        while [ "$try" -lt 30 ]; do
+            resolved="$(getent hosts "$CMO_PRIMARY_HOST" | awk '{ print $1; exit }')"
+            if [ -n "$resolved" ]; then
+                CMO_PRIMARY_HOST="$resolved"
+                break
+            fi
+            try=$((try + 1))
+            sleep 1
+        done
+    fi
     # Sentinel rewrites this file as it learns replicas. Overwriting it on
     # every start drops that list until the next discovery pass, and a
-    # failover in that window fails with "no good replica".
+    # failover in that window fails with "no good replica". A later start
+    # only refreshes the monitored primary address, because a container
+    # restart can change that IP while the saved replica names stay valid.
     sentinel_conf="${CMO_RUNTIME_DIR}/cmo-sentinel.conf"
-    if [ ! -s "$sentinel_conf" ]; then
-        # Monitor the address resolved at start. A killed container drops out of
-        # Docker DNS, and Sentinel will not fail over while it is still trying to
-        # resolve that name. Replicas can still be reached by hostname.
-        if command -v getent >/dev/null 2>&1; then
-            resolved=""
-            try=0
-            while [ "$try" -lt 30 ]; do
-                resolved="$(getent hosts "$CMO_PRIMARY_HOST" | awk '{ print $1; exit }')"
-                if [ -n "$resolved" ]; then
-                    CMO_PRIMARY_HOST="$resolved"
-                    break
-                fi
-                try=$((try + 1))
-                sleep 1
-            done
-        fi
+    if [ -s "$sentinel_conf" ]; then
+        awk -v name="$CMO_SENTINEL_MASTER" -v ip="$CMO_PRIMARY_HOST" '
+            $1 == "sentinel" && $2 == "monitor" && $3 == name { $4 = ip }
+            { print }
+        ' "$sentinel_conf" > "${sentinel_conf}.new"
+        mv "${sentinel_conf}.new" "$sentinel_conf"
+        chmod 600 "$sentinel_conf"
+    else
         {
             printf '%s\n' "bind ${CMO_CONTAINER_BIND}"
             printf '%s\n' "port ${CMO_PORT}"
@@ -391,6 +400,17 @@ sed \
         if [ -n "${CMO_ANNOUNCE_IP:-}" ]; then
             printf '%s\n' "replica-announce-ip ${CMO_ANNOUNCE_IP}"
             printf '%s\n' "replica-announce-port ${CMO_ANNOUNCE_PORT:-${CMO_PORT}}"
+        else
+            # A Docker restart can hand the container a new IP. Announce the
+            # hostname so Sentinel's saved replica address still resolves.
+            announced="$(hostname 2>/dev/null || true)"
+            case "$announced" in
+                "" | localhost | 127.0.0.1) ;;
+                *)
+                    printf '%s\n' "replica-announce-ip ${announced}"
+                    printf '%s\n' "replica-announce-port ${CMO_ANNOUNCE_PORT:-${CMO_PORT}}"
+                    ;;
+            esac
         fi
     fi
     if [ "$CMO_CLUSTER_ENABLED" = "yes" ]; then
