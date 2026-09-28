@@ -9,7 +9,7 @@
 # container (CMO_PORT and CMO_PORT+10000) unless you also set CMO_ANNOUNCE_PORT
 # and CMO_ANNOUNCE_BUS_PORT to the published ports.
 
-name: cache-me-outside
+name: ${CMO_PROJECT:-cache-me-outside}
 
 services:
   cmo-node:
@@ -17,8 +17,8 @@ services:
       context: ..
       dockerfile: Dockerfile
     image: cache-me-outside:local
-    container_name: cmo-node
-    hostname: cmo-node
+    container_name: ${CMO_NAME_PREFIX:-cache-me-outside}-node
+    hostname: ${CMO_NAME_PREFIX:-cache-me-outside}-node
     env_file:
       - path: ${CMO_ENV_FILE:-.env}
         required: false
@@ -46,12 +46,18 @@ services:
       - no-new-privileges:true
     mem_limit: ${CMO_CONTAINER_MEMORY:-512m}
     cpus: "${CMO_CPUS:-1.0}"
+    networks:
+      cmo: {}
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
 
+networks:
+  cmo:
+    name: ${CMO_NETWORK:-cache-me-outside}
+
 volumes:
   cmo-node-data:
-    name: cmo-node-data
+    name: ${CMO_NAME_PREFIX:-cache-me-outside}-node-data

@@ -18,6 +18,13 @@ auth:
   adminPasswordKey: admin-password
   appUserKey: app-user
   appPasswordKey: app-password
+  # Optional. Missing keys leave replication, Sentinel, and cluster tooling on admin.
+  replUserKey: repl-user
+  replPasswordKey: repl-password
+  sentinelUserKey: sentinel-user
+  sentinelPasswordKey: sentinel-password
+  clusterUserKey: cluster-user
+  clusterPasswordKey: cluster-password
 
 resources:
   requests:
@@ -112,7 +119,8 @@ sentinel:
       cpu: 50m
       memory: 64Mi
     limits:
-      cpu: 250m
+      # 250m and below can stall Sentinel long enough to enter TILT.
+      cpu: "1"
       memory: 128Mi
 
 cluster:

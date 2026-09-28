@@ -30,7 +30,7 @@ Changing `CMO_CONTAINER_MEMORY`, `CMO_CPUS`, or `CMO_IO_THREADS` applies on the 
 # half the live container limit.
 ./scale-memory.sh 384mb
 ./scale-memory.sh 384mb --all          # every data node in the running topology
-./scale-memory.sh 384mb cmo-cluster-0  # one node
+./scale-memory.sh 384mb cache-me-outside-cluster-0  # one node
 ```
 
 The helper uses the admin user (`CONFIG SET maxmemory`). It also writes `CMO_MAXMEMORY` in the env file (`CMO_ENV_FILE` or `deploy/.env`) so the next recreate does not snap back. A `docker restart` of an existing container keeps the environment from when that container was created; recreate with `./up.sh` to pick up the file.
@@ -46,20 +46,22 @@ CMO_SENTINELS=3         # quorum is 2 unless CMO_SENTINEL_QUORUM is set
 ./up.sh sentinel
 ```
 
-`deploy/render-topology.sh` writes `deploy/.generated/compose.yml`. The primary is `cmo-primary`, replicas are `cmo-replica-N`, sentinels are `cmo-sentinel-N`. Each data node has its own volume. Host ports start at `CMO_HOST_PORT` (6379) for the primary and step by one for each replica. Sentinel host ports start at `CMO_SENTINEL_PORT` (26379). All of them are published on `CMO_BIND_ADDRESS`, which defaults to `127.0.0.1`. `./up.sh` rejects `0.0.0.0`, `::`, and `*`. A different address per node is `CMO_BIND_ADDRESS_SENTINEL_1` (and the same for `2`, `3`, …) plus the bind stored for each data node when the topology is rendered.
+`deploy/render-topology.sh` writes `deploy/.generated/<project>/compose.yml`. With the default prefix the primary is `cache-me-outside-primary`, replicas are `cache-me-outside-replica-N`, and sentinels are `cache-me-outside-sentinel-N`. Each data node has its own volume. Each Sentinel also has a volume at `/data` and writes its config only when that file is missing, so a restart keeps the replicas it has already learned. Host ports start at `CMO_HOST_PORT` (6379) for the primary and step by one for each replica. Sentinel host ports start at `CMO_SENTINEL_PORT` (26379). All of them are published on `CMO_BIND_ADDRESS`, which defaults to `127.0.0.1`. `./up.sh` rejects `0.0.0.0`, `::`, and `*`. A different address per node is `CMO_BIND_ADDRESS_SENTINEL_1` (and the same for `2`, `3`, …) plus the bind stored for each data node when the topology is rendered.
 
-Inside the Docker network the primary name is `cmo-primary`. Sentinels watch that name (`sentinel resolve-hostnames yes`) and authenticate as the admin user. The app user can ask Sentinel where the primary is and cannot run `SENTINEL FAILOVER`.
+Inside the Docker network the primary name is `cache-me-outside-primary`. Sentinels watch that name (`sentinel resolve-hostnames yes`) and authenticate as admin, or as `CMO_SENTINEL_USER` when that variable is set. The app user can ask Sentinel where the primary is and cannot run `SENTINEL FAILOVER`.
+
+`CMO_SENTINEL_CPUS` defaults to `1.0`. A limit of `0.25` or less can pause the Sentinel process long enough that it enters TILT. TILT adds about 30 seconds before failover proceeds. The Helm chart uses the same one-CPU limit.
 
 Application clients should be sentinel-aware and should use the app user against the data port. Point them at the three sentinel host ports.
 
 Failover check (also what CI runs, with one replica and a short down-after):
 
 ```bash
-CMO_REPLICAS=1 CMO_SENTINEL_DOWN_AFTER_MS=2000 ./smoke.sh sentinel
+CMO_REPLICAS=1 CMO_SENTINEL_DOWN_AFTER_MS=2000 ./smoke.sh --mutate sentinel
 ./sentinel-failover.sh --no-up
 ```
 
-The script disables the primary's restart policy and kills it, then waits until Sentinel publishes a different address and a write succeeds there.
+Those scripts use the `cmo-test` project unless `--i-know` is passed. The failover script waits until every Sentinel lists every replica, then disables the primary's restart policy and kills it. It waits until Sentinel publishes a different address and a write succeeds there.
 
 To change the replica count, set `CMO_REPLICAS`, run `./down.sh`, then `./up.sh sentinel`. That deletes volumes. Adding a replica to a live Sentinel set is a new container with `CMO_ROLE=replica` and `CMO_PRIMARY_HOST` set to the current primary; the supported path for a count change on one machine is the env var plus a new render (`CMO_RESET_TOPOLOGY=1`).
 
@@ -71,26 +73,26 @@ CMO_CLUSTER_REPLICAS=1    # per primary, so this is 6 nodes
 ./up.sh cluster
 ```
 
-`./up.sh cluster` starts the nodes and runs `deploy/cluster-bootstrap.sh`, which is `valkey-cli --cluster create`. Every node starts as an empty cluster node (no `replicaof` in the config: that combination does not boot). The create command assigns replicas. The same ACL file is generated on every node. Replication uses the admin user. Each node has its own volume, AOF `everysec`, and RDB. The app user still cannot `FLUSHALL`, `CONFIG`, `KEYS`, `CLUSTER MEET`, or `CLUSTER SETSLOT`.
+`./up.sh cluster` starts the nodes and runs `deploy/cluster-bootstrap.sh`, which is `valkey-cli --cluster create`. Every node starts as an empty cluster node (no `replicaof` in the config: that combination does not boot). The create command assigns replicas. The same ACL file is generated on every node. Replication uses admin, or `CMO_REPL_USER` when that variable is set. Cluster admin commands from these scripts use admin, or `CMO_CLUSTER_USER` when that variable is set. That user is not the cluster bus. Each node has its own volume, AOF `everysec`, and RDB. The app user still cannot `FLUSHALL`, `CONFIG`, `KEYS`, `CLUSTER MEET`, or `CLUSTER SETSLOT`.
 
-On one machine the nodes announce their container hostname (`cluster-preferred-endpoint-type hostname`). Cluster redirects therefore resolve on the Docker network `cache-me-outside`, which is where `valkey-cli -c` in these scripts runs. The host ports are still bound to `127.0.0.1` by default so a process on the host can open a single node, but a host client that follows redirects will be sent a container hostname. Use a client on the Docker network, or the multi-host announce settings below.
+On one machine the nodes announce their container hostname (`cluster-preferred-endpoint-type hostname`). Cluster redirects therefore resolve on the Docker network named by `CMO_NETWORK` (default `cache-me-outside`), which is where `valkey-cli -c` in these scripts runs. The host ports are still bound to `127.0.0.1` by default so a process on the host can open a single node, but a host client that follows redirects will be sent a container hostname. Use a client on the Docker network, or the multi-host announce settings below.
 
 ### Add a node
 
 ```bash
 ./cluster-add.sh primary
-./cluster-add.sh replica cmo-cluster-0
+./cluster-add.sh replica cache-me-outside-cluster-0
 ```
 
-`primary` starts a new container, `CLUSTER` add-node, then rebalance onto the empty primary. `replica` attaches to the named primary and does not take slots. Host ports are the next free port above the ones already in `deploy/.generated/state`, still on `CMO_BIND_ADDRESS`.
+`primary` starts a new container, `CLUSTER` add-node, then rebalance onto the empty primary. `replica` attaches to the named primary and does not take slots. Host ports are the next free port above the ones already in `deploy/.generated/<project>/state`, still on `CMO_BIND_ADDRESS`.
 
 ### Remove a node
 
 ```bash
-./cluster-remove.sh cmo-cluster-3
+./cluster-remove.sh cache-me-outside-cluster-3
 ```
 
-A replica is deleted with `CLUSTER` del-node. A primary is refused if it is the last primary or if it still has replicas (remove those first). Otherwise every slot it owns is resharded to another primary, the script waits until it owns zero slots, and only then deletes it and its volume. Keys move with the slots.
+A replica is deleted with `CLUSTER` del-node. A primary is refused if it is the last primary or if it still has replicas (remove those first). Otherwise every slot it owns is resharded to another primary, the script waits until it owns zero slots, deletes that container and its volume, and then rebalances the remaining primaries. Without that rebalance every slot stays on the one node that received the drain. Keys move with the slots.
 
 The scale test CI runs, and the local check, is:
 
@@ -98,7 +100,7 @@ The scale test CI runs, and the local check, is:
 CMO_CLUSTER_PRIMARIES=3 CMO_CLUSTER_REPLICAS=0 ./cluster-scale-test.sh
 ```
 
-That is the shared smoke test in cluster mode, then a fourth primary, a rebalance, a check that each primary owns slots and that every key is still readable, then a drain of that fourth node and the same key check.
+That is the shared smoke test in cluster mode on the `cmo-test` project, then a fourth primary, a rebalance, a check that each primary owns slots and that every key is still readable, then a drain of that fourth node, another rebalance, and the same key and slot checks. It refuses to run against the default project unless `--i-know` is passed.
 
 ## Multi-host
 

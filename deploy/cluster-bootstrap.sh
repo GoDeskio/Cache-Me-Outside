@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Assign slots on a freshly started cluster. Safe to run again: an already
 # healthy cluster is left alone. In-network nodes are read from
-# deploy/.generated/state. For one node per host, set CMO_CLUSTER_NODES to a
+# deploy/.generated/<project>/state. For one node per host, set CMO_CLUSTER_NODES to a
 # comma-separated list of announce addresses (host:port) and run this on a
 # machine that can reach them.
 set -euo pipefail
@@ -18,12 +18,12 @@ if [[ -n "${CMO_CLUSTER_NODES:-}" ]]; then
     IFS=',' read -r -a addrs <<< "$CMO_CLUSTER_NODES"
     replicas="${CMO_CLUSTER_REPLICAS}"
 else
-    if [[ ! -f .generated/state ]]; then
+    if [[ ! -f "$(cmo_state_file)" ]]; then
         echo "No cluster state. Start it with ./up.sh cluster, or set CMO_CLUSTER_NODES." >&2
         exit 1
     fi
-    # shellcheck disable=SC1091
-    source .generated/state
+    # shellcheck disable=SC1090
+    source "$(cmo_state_file)"
     if [[ "$topology" != "cluster" ]]; then
         echo "State is ${topology}, not cluster." >&2
         exit 1
@@ -50,11 +50,11 @@ already_ok() {
     if [[ -n "$runner" ]]; then
         info="$(cmo_admin "$runner" CLUSTER INFO || true)"
     elif command -v valkey-cli >/dev/null 2>&1; then
-        info="$(valkey-cli -h "${addrs[0]%%:*}" -p "${addrs[0]##*:}" --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning CLUSTER INFO || true)"
+        info="$(valkey-cli -h "${addrs[0]%%:*}" -p "${addrs[0]##*:}" --user "$(cmo_cluster_user)" -a "$(cmo_cluster_password)" --no-auth-warning CLUSTER INFO || true)"
     else
         info="$(docker run --rm --network host --entrypoint valkey-cli cache-me-outside:local \
             -h "${addrs[0]%%:*}" -p "${addrs[0]##*:}" \
-            --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning CLUSTER INFO || true)"
+            --user "$(cmo_cluster_user)" -a "$(cmo_cluster_password)" --no-auth-warning CLUSTER INFO || true)"
     fi
     grep -q 'cluster_state:ok' <<< "$info"
 }
@@ -70,12 +70,12 @@ run_create() {
         return
     fi
     if command -v valkey-cli >/dev/null 2>&1; then
-        valkey-cli --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning \
+        valkey-cli --user "$(cmo_cluster_user)" -a "$(cmo_cluster_password)" --no-auth-warning \
             --cluster create "${addrs[@]}" --cluster-replicas "$replicas" --cluster-yes
         return
     fi
     docker run --rm --network host --entrypoint valkey-cli cache-me-outside:local \
-        --user "$CMO_ADMIN_USER" -a "$CMO_ADMIN_PASSWORD" --no-auth-warning \
+        --user "$(cmo_cluster_user)" -a "$(cmo_cluster_password)" --no-auth-warning \
         --cluster create "${addrs[@]}" --cluster-replicas "$replicas" --cluster-yes
 }
 

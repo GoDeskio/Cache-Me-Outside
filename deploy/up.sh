@@ -55,7 +55,7 @@ fi
 
 if [[ "$topology" == "sentinel" || "$topology" == "cluster" ]]; then
     ./render-topology.sh "$topology"
-    cmo_dc -f .generated/compose.yml up -d --build --wait "$@"
+    cmo_dc -f "$(cmo_compose_file)" up -d --build --wait "$@"
     if [[ "$topology" == "cluster" ]]; then
         ./cluster-bootstrap.sh
     fi

@@ -50,10 +50,20 @@ spec:
               value: {{ .Values.sentinel.downAfterMilliseconds | quote }}
             - name: CMO_SENTINEL_FAILOVER_TIMEOUT
               value: {{ .Values.sentinel.failoverTimeout | quote }}
+            - name: CMO_DATA_DIR
+              value: /data
+            - name: CMO_RUNTIME_DIR
+              value: /data
           {{- include "cmo.probes" . | nindent 10 }}
           {{- include "cmo.preStop" (merge (dict "shutdownMode" "NOSAVE") .) | nindent 10 }}
           resources:
             {{- toYaml .Values.sentinel.resources | nindent 12 }}
+          volumeMounts:
+            - name: sentinel-state
+              mountPath: /data
+      volumes:
+        - name: sentinel-state
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

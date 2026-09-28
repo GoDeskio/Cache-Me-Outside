@@ -22,9 +22,10 @@ new_raw="$1"
 target="${2:-}"
 new_bytes="$(cmo_mem_to_bytes "$new_raw")"
 
+standalone="$(cmo_standalone_name)"
 if [[ -z "$target" ]]; then
-    if docker inspect cache-me-outside >/dev/null 2>&1; then
-        target="cache-me-outside"
+    if docker inspect "$standalone" >/dev/null 2>&1; then
+        target="$standalone"
     else
         target="--all"
     fi
@@ -32,23 +33,23 @@ fi
 
 containers=()
 if [[ "$target" == "--all" ]]; then
-    if [[ -f .generated/state ]]; then
-        # shellcheck disable=SC1091
-        source .generated/state
+    if [[ -f "$(cmo_state_file)" ]]; then
+        # shellcheck disable=SC1090
+        source "$(cmo_state_file)"
         for spec in "${nodes[@]}"; do
             # shellcheck disable=SC2086
             set -- $spec
             containers+=("$1")
         done
-    elif docker inspect cache-me-outside >/dev/null 2>&1; then
-        containers+=(cache-me-outside)
+    elif docker inspect "$standalone" >/dev/null 2>&1; then
+        containers+=("$standalone")
     else
         echo "No data nodes are running." >&2
         exit 1
     fi
 else
     case "$target" in
-        cmo-sentinel-*)
+        *-sentinel-*)
             echo "Sentinel processes are not data nodes." >&2
             exit 1
             ;;

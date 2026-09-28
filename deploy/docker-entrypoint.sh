@@ -1,6 +1,8 @@
 #!/bin/sh
 # Generate the ACL file from the environment, then start valkey-server.
-# Passwords are never written into the image or the data volume.
+# Passwords are never written into the image. The ACL file lives in the runtime
+# directory. Sentinel keeps its rewritten config there too, so a Sentinel whose
+# runtime directory is the data volume stores its auth lines on that volume.
 set -eu
 
 # Client tools skip ACL generation. `docker run --entrypoint valkey-cli` stays a client.
@@ -197,6 +199,61 @@ if [ "$CMO_ADMIN_PASSWORD" = "$CMO_APP_PASSWORD" ]; then
     exit 1
 fi
 
+# Optional accounts. Unset keeps replication, Sentinel, and cluster tooling on admin.
+distinct_account() {
+    if [ "$2" = "$CMO_ADMIN_USER" ] || [ "$2" = "$CMO_APP_USER" ]; then
+        echo "cache-me-outside: $1 must differ from the admin and app users" >&2
+        exit 1
+    fi
+    if [ "$3" = "$CMO_ADMIN_PASSWORD" ] || [ "$3" = "$CMO_APP_PASSWORD" ]; then
+        echo "cache-me-outside: $1 password must differ from the admin and app passwords" >&2
+        exit 1
+    fi
+}
+
+repl_user="$CMO_ADMIN_USER"
+repl_pass="$CMO_ADMIN_PASSWORD"
+if [ -n "${CMO_REPL_USER:-}" ]; then
+    require_user "$CMO_REPL_USER" CMO_REPL_USER
+    require_password "${CMO_REPL_PASSWORD:?Set CMO_REPL_PASSWORD with CMO_REPL_USER}" CMO_REPL_PASSWORD
+    distinct_account CMO_REPL_USER "$CMO_REPL_USER" "$CMO_REPL_PASSWORD"
+    repl_user="$CMO_REPL_USER"
+    repl_pass="$CMO_REPL_PASSWORD"
+fi
+
+sentinel_user="$CMO_ADMIN_USER"
+sentinel_pass="$CMO_ADMIN_PASSWORD"
+if [ -n "${CMO_SENTINEL_USER:-}" ]; then
+    require_user "$CMO_SENTINEL_USER" CMO_SENTINEL_USER
+    require_password "${CMO_SENTINEL_PASSWORD:?Set CMO_SENTINEL_PASSWORD with CMO_SENTINEL_USER}" CMO_SENTINEL_PASSWORD
+    distinct_account CMO_SENTINEL_USER "$CMO_SENTINEL_USER" "$CMO_SENTINEL_PASSWORD"
+    sentinel_user="$CMO_SENTINEL_USER"
+    sentinel_pass="$CMO_SENTINEL_PASSWORD"
+fi
+
+cluster_user=""
+cluster_pass=""
+if [ -n "${CMO_CLUSTER_USER:-}" ]; then
+    require_user "$CMO_CLUSTER_USER" CMO_CLUSTER_USER
+    require_password "${CMO_CLUSTER_PASSWORD:?Set CMO_CLUSTER_PASSWORD with CMO_CLUSTER_USER}" CMO_CLUSTER_PASSWORD
+    distinct_account CMO_CLUSTER_USER "$CMO_CLUSTER_USER" "$CMO_CLUSTER_PASSWORD"
+    cluster_user="$CMO_CLUSTER_USER"
+    cluster_pass="$CMO_CLUSTER_PASSWORD"
+fi
+
+if [ -n "${CMO_REPL_USER:-}" ] && [ -n "${CMO_SENTINEL_USER:-}" ] && [ "$CMO_REPL_USER" = "$CMO_SENTINEL_USER" ]; then
+    echo "cache-me-outside: CMO_REPL_USER and CMO_SENTINEL_USER must differ" >&2
+    exit 1
+fi
+if [ -n "${CMO_REPL_USER:-}" ] && [ -n "$cluster_user" ] && [ "$CMO_REPL_USER" = "$cluster_user" ]; then
+    echo "cache-me-outside: CMO_REPL_USER and CMO_CLUSTER_USER must differ" >&2
+    exit 1
+fi
+if [ -n "${CMO_SENTINEL_USER:-}" ] && [ -n "$cluster_user" ] && [ "$CMO_SENTINEL_USER" = "$cluster_user" ]; then
+    echo "cache-me-outside: CMO_SENTINEL_USER and CMO_CLUSTER_USER must differ" >&2
+    exit 1
+fi
+
 umask 077
 # ACL files accept only "user" and "role" lines. Comments are rejected.
 # Sentinel subcommands exist only in sentinel mode, so the discovery allows
@@ -210,59 +267,82 @@ else
 fi
 mkdir -p "$CMO_DATA_DIR" "$CMO_RUNTIME_DIR"
 acl_file="${CMO_RUNTIME_DIR}/cmo-users.acl"
-cat > "$acl_file" <<EOF
-user default reset
-user ${CMO_ADMIN_USER} on >${CMO_ADMIN_PASSWORD} ~* &* +@all
-user ${CMO_APP_USER} on >${CMO_APP_PASSWORD} ~* &* ${app_acl}
-EOF
+{
+    printf '%s\n' "user default reset"
+    printf '%s\n' "user ${CMO_ADMIN_USER} on >${CMO_ADMIN_PASSWORD} ~* &* +@all"
+    printf '%s\n' "user ${CMO_APP_USER} on >${CMO_APP_PASSWORD} ~* &* ${app_acl}"
+    if [ -n "${CMO_REPL_USER:-}" ] && [ "$CMO_ROLE" != "sentinel" ]; then
+        # The replica authenticates to the primary with these commands only.
+        printf '%s\n' "user ${repl_user} on >${repl_pass} ~* &* +psync +sync +replconf +ping +client|setname +info"
+    fi
+    if [ -n "${CMO_SENTINEL_USER:-}" ]; then
+        if [ "$CMO_ROLE" = "sentinel" ]; then
+            # Other Sentinels authenticate with this user for hello and quorum checks.
+            printf '%s\n' "user ${sentinel_user} on >${sentinel_pass} ~* &* +@all -@dangerous -@admin +ping +subscribe +unsubscribe +psubscribe +punsubscribe +publish +sentinel|is-master-down-by-addr +sentinel|get-master-addr-by-name +sentinel|get-primary-addr-by-name +sentinel|sentinels +sentinel|replicas +sentinel|slaves +sentinel|masters +sentinel|primaries"
+        else
+            # Sentinel's auth-user on a data node. Failover sends REPLICAOF, CONFIG REWRITE, and CLIENT KILL.
+            printf '%s\n' "user ${sentinel_user} on >${sentinel_pass} ~* &* +ping +info +replconf +multi +exec +role +replicaof +slaveof +failover +config|rewrite +config|get +config|set +client|setname +client|kill"
+        fi
+    fi
+    if [ -n "$cluster_user" ] && [ "$CMO_ROLE" != "sentinel" ]; then
+        # Tooling user for valkey-cli --cluster. The cluster bus is not this account.
+        printf '%s\n' "user ${cluster_user} on >${cluster_pass} ~* &* +cluster +migrate +info +ping +asking +readonly +readwrite +config|get"
+    fi
+} > "$acl_file"
 chmod 600 "$acl_file"
 
 if [ "$CMO_ROLE" = "sentinel" ]; then
     : "${CMO_PRIMARY_HOST:?Set CMO_PRIMARY_HOST for a sentinel}"
     : "${CMO_PRIMARY_PORT:=6379}"
-    # Monitor the address resolved at start. A killed container drops out of
-    # Docker DNS, and Sentinel will not fail over while it is still trying to
-    # resolve that name. Replicas can still be reached by hostname.
-    if command -v getent >/dev/null 2>&1; then
-        resolved=""
-        try=0
-        while [ "$try" -lt 30 ]; do
-            resolved="$(getent hosts "$CMO_PRIMARY_HOST" | awk '{ print $1; exit }')"
-            if [ -n "$resolved" ]; then
-                CMO_PRIMARY_HOST="$resolved"
-                break
-            fi
-            try=$((try + 1))
-            sleep 1
-        done
-    fi
     umask 077
-    {
-        printf '%s\n' "bind ${CMO_CONTAINER_BIND}"
-        printf '%s\n' "port ${CMO_PORT}"
-        printf '%s\n' "protected-mode yes"
-        printf '%s\n' "daemonize no"
-        printf '%s\n' "supervised no"
-        printf '%s\n' "logfile \"\""
-        printf '%s\n' "dir ${CMO_RUNTIME_DIR}"
-        printf '%s\n' "aclfile ${acl_file}"
-        printf '%s\n' "sentinel monitor ${CMO_SENTINEL_MASTER} ${CMO_PRIMARY_HOST} ${CMO_PRIMARY_PORT} ${CMO_SENTINEL_QUORUM}"
-        printf '%s\n' "sentinel auth-user ${CMO_SENTINEL_MASTER} ${CMO_ADMIN_USER}"
-        printf '%s\n' "sentinel auth-pass ${CMO_SENTINEL_MASTER} ${CMO_ADMIN_PASSWORD}"
-        printf '%s\n' "sentinel down-after-milliseconds ${CMO_SENTINEL_MASTER} ${CMO_SENTINEL_DOWN_AFTER_MS}"
-        printf '%s\n' "sentinel failover-timeout ${CMO_SENTINEL_MASTER} ${CMO_SENTINEL_FAILOVER_TIMEOUT}"
-        printf '%s\n' "sentinel parallel-syncs ${CMO_SENTINEL_MASTER} ${CMO_SENTINEL_PARALLEL_SYNCS}"
-        printf '%s\n' "sentinel resolve-hostnames yes"
-        printf '%s\n' "sentinel announce-hostnames yes"
-        printf '%s\n' "sentinel sentinel-user ${CMO_ADMIN_USER}"
-        printf '%s\n' "sentinel sentinel-pass ${CMO_ADMIN_PASSWORD}"
-        if [ -n "${CMO_ANNOUNCE_IP:-}" ]; then
-            printf '%s\n' "sentinel announce-ip ${CMO_ANNOUNCE_IP}"
-            printf '%s\n' "sentinel announce-port ${CMO_ANNOUNCE_PORT:-${CMO_PORT}}"
+    # Sentinel rewrites this file as it learns replicas. Overwriting it on
+    # every start drops that list until the next discovery pass, and a
+    # failover in that window fails with "no good replica".
+    sentinel_conf="${CMO_RUNTIME_DIR}/cmo-sentinel.conf"
+    if [ ! -s "$sentinel_conf" ]; then
+        # Monitor the address resolved at start. A killed container drops out of
+        # Docker DNS, and Sentinel will not fail over while it is still trying to
+        # resolve that name. Replicas can still be reached by hostname.
+        if command -v getent >/dev/null 2>&1; then
+            resolved=""
+            try=0
+            while [ "$try" -lt 30 ]; do
+                resolved="$(getent hosts "$CMO_PRIMARY_HOST" | awk '{ print $1; exit }')"
+                if [ -n "$resolved" ]; then
+                    CMO_PRIMARY_HOST="$resolved"
+                    break
+                fi
+                try=$((try + 1))
+                sleep 1
+            done
         fi
-    } > "${CMO_RUNTIME_DIR}/cmo-sentinel.conf"
-    chmod 600 "${CMO_RUNTIME_DIR}/cmo-sentinel.conf"
-    exec valkey-sentinel "${CMO_RUNTIME_DIR}/cmo-sentinel.conf" "$@"
+        {
+            printf '%s\n' "bind ${CMO_CONTAINER_BIND}"
+            printf '%s\n' "port ${CMO_PORT}"
+            printf '%s\n' "protected-mode yes"
+            printf '%s\n' "daemonize no"
+            printf '%s\n' "supervised no"
+            printf '%s\n' "logfile \"\""
+            printf '%s\n' "dir ${CMO_RUNTIME_DIR}"
+            printf '%s\n' "aclfile ${acl_file}"
+            printf '%s\n' "sentinel monitor ${CMO_SENTINEL_MASTER} ${CMO_PRIMARY_HOST} ${CMO_PRIMARY_PORT} ${CMO_SENTINEL_QUORUM}"
+            printf '%s\n' "sentinel auth-user ${CMO_SENTINEL_MASTER} ${sentinel_user}"
+            printf '%s\n' "sentinel auth-pass ${CMO_SENTINEL_MASTER} ${sentinel_pass}"
+            printf '%s\n' "sentinel down-after-milliseconds ${CMO_SENTINEL_MASTER} ${CMO_SENTINEL_DOWN_AFTER_MS}"
+            printf '%s\n' "sentinel failover-timeout ${CMO_SENTINEL_MASTER} ${CMO_SENTINEL_FAILOVER_TIMEOUT}"
+            printf '%s\n' "sentinel parallel-syncs ${CMO_SENTINEL_MASTER} ${CMO_SENTINEL_PARALLEL_SYNCS}"
+            printf '%s\n' "sentinel resolve-hostnames yes"
+            printf '%s\n' "sentinel announce-hostnames yes"
+            printf '%s\n' "sentinel sentinel-user ${sentinel_user}"
+            printf '%s\n' "sentinel sentinel-pass ${sentinel_pass}"
+            if [ -n "${CMO_ANNOUNCE_IP:-}" ]; then
+                printf '%s\n' "sentinel announce-ip ${CMO_ANNOUNCE_IP}"
+                printf '%s\n' "sentinel announce-port ${CMO_ANNOUNCE_PORT:-${CMO_PORT}}"
+            fi
+        } > "$sentinel_conf"
+        chmod 600 "$sentinel_conf"
+    fi
+    exec valkey-sentinel "$sentinel_conf" "$@"
 fi
 
 replica_host=""
@@ -301,10 +381,10 @@ sed \
     printf '%s\n' "maxmemory-policy ${CMO_MAXMEMORY_POLICY}"
     printf '%s\n' "io-threads ${CMO_IO_THREADS}"
     if [ "$CMO_CLUSTER_ENABLED" = "yes" ] || [ -n "$replica_host" ]; then
-        # Replicas and cluster nodes authenticate replication as the admin user.
+        # Replicas authenticate as CMO_REPL_USER when that account is set, otherwise admin.
         # The app user cannot SYNC/PSYNC.
-        printf '%s\n' "masteruser ${CMO_ADMIN_USER}"
-        printf '%s\n' "masterauth ${CMO_ADMIN_PASSWORD}"
+        printf '%s\n' "masteruser ${repl_user}"
+        printf '%s\n' "masterauth ${repl_pass}"
     fi
     if [ -n "$replica_host" ]; then
         printf '%s\n' "replicaof ${replica_host} ${replica_port}"

@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
-# Verify auth, the restricted app user, persistence, and the -cmo marker.
-#   ./smoke.sh                  standalone
+# Verify auth, the restricted app user, and the -cmo marker.
+#   ./smoke.sh                  standalone, read-only plus one throwaway key
+#   ./smoke.sh --mutate         also raise memory, rewrite the env file, and restart
 #   ./smoke.sh sentinel
 #   ./smoke.sh cluster          uses a cluster-aware client
 #   ./smoke.sh --generate-env   write deploy/.env when it is missing
 #   ./smoke.sh --no-up          check a stack that is already running
+#   ./smoke.sh --i-know         allow the production project (can change a live cache)
+#
+# The default project is cmo-test. A production project is refused unless
+# --i-know is passed. That check runs before any container is started or removed.
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -13,11 +18,15 @@ source ./lib.sh
 
 generate_env=0
 no_up=0
+mutate=0
 topology="${CMO_TOPOLOGY:-standalone}"
+original_args=("$@")
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --generate-env) generate_env=1 ;;
         --no-up) no_up=1 ;;
+        --mutate) mutate=1 ;;
+        --i-know) ;;
         standalone | sentinel | cluster) topology="$1" ;;
         *)
             echo "Unknown argument: $1" >&2
@@ -26,6 +35,9 @@ while [[ $# -gt 0 ]]; do
     esac
     shift
 done
+
+# Refuse the production project before generating files or talking to Docker.
+cmo_prepare_test_identity "${original_args[@]}"
 export CMO_TOPOLOGY="$topology"
 
 env_path="$(cmo_env_path)"
@@ -64,9 +76,9 @@ if [[ "$topology" == "cluster" ]]; then
 fi
 
 case "$topology" in
-    standalone) container="cache-me-outside" ;;
-    sentinel) container="cmo-primary" ;;
-    cluster) container="cmo-cluster-0" ;;
+    standalone) container="$(cmo_standalone_name)" ;;
+    sentinel) container="$(cmo_member_name primary)" ;;
+    cluster) container="$(cmo_member_name cluster-0)" ;;
     *)
         echo "smoke.sh does not target topology ${topology}" >&2
         exit 1
@@ -95,8 +107,8 @@ data_nodes() {
         echo "$container"
         return
     fi
-    # shellcheck disable=SC1091
-    source .generated/state
+    # shellcheck disable=SC1090
+    source "$(cmo_state_file)"
     local spec
     for spec in "${nodes[@]}"; do
         # shellcheck disable=SC2086
@@ -121,10 +133,11 @@ case "$unauth" in
     *) fail "unauthenticated PING was not rejected: ${unauth}" ;;
 esac
 
-cmo_app "$container" SET cmo:smoke persisted >/dev/null
-got="$(cmo_app "$container" GET cmo:smoke | tr -d '\r')"
+# A throwaway key. The default run deletes it and does not restart anything.
+smoke_key="cmo:smoke:${RANDOM}${RANDOM}"
+cmo_app "$container" SET "$smoke_key" persisted >/dev/null
+got="$(cmo_app "$container" GET "$smoke_key" | tr -d '\r')"
 [[ "$got" == "persisted" ]] || fail "GET returned '${got}'"
-sleep 2
 
 expect_noper FLUSHALL FLUSHALL
 expect_noper FLUSHDB FLUSHDB
@@ -154,6 +167,14 @@ case "$version" in
     "" | *-* | *[!0-9.]*) fail "valkey_version is not a numeric major.minor.patch value: '${version}'" ;;
 esac
 
+if [[ "$mutate" -eq 0 ]]; then
+    cmo_app "$container" DEL "$smoke_key" >/dev/null
+    left="$(cmo_app "$container" GET "$smoke_key" | tr -d '\r' || true)"
+    [[ -z "$left" ]] || fail "throwaway key ${smoke_key} was not deleted"
+    echo "smoke: ok (${topology}, read-only, cmo_version marker present, auth required, app user restricted)"
+    exit 0
+fi
+
 if [[ "$topology" == "standalone" ]]; then
     # The default 256mb cache sits at half of the 512m limit. Grow the cgroup
     # first, then raise maxmemory live. A decrease and an over-half value must fail.
@@ -167,8 +188,8 @@ if [[ "$topology" == "standalone" ]]; then
     if ./scale-memory.sh 400mb "$container" >/dev/null 2>&1; then
         fail "scale-memory.sh accepted a value above half the container limit"
     fi
-    # Later topologies read .env. Put the documented default back; this process
-    # keeps the live 320mb until it is recreated.
+    # Later topologies read the env file. Put the documented default back; this
+    # process keeps the live 320mb until it is recreated.
     sed -i 's/^CMO_MAXMEMORY=.*/CMO_MAXMEMORY=256mb/' "$(cmo_env_path)"
 fi
 
@@ -193,9 +214,10 @@ done
 [[ "$saved" -eq 1 ]] || fail "RDB snapshot or AOF directory is missing on a data volume"
 
 if [[ "$topology" == "standalone" ]]; then
-    cmo_dc -f docker-compose.yml restart "$container" >/dev/null
+    # The compose service key stays cache-me-outside. The container name is the prefix.
+    cmo_dc -f docker-compose.yml restart cache-me-outside >/dev/null
 else
-    cmo_dc -f .generated/compose.yml restart >/dev/null
+    cmo_dc -f "$(cmo_compose_file)" restart >/dev/null
 fi
 cmo_wait_healthy "$container"
 if [[ "$topology" == "cluster" ]]; then
@@ -223,7 +245,8 @@ if [[ "$topology" == "cluster" ]]; then
     [[ "$stable" -ge 3 ]] || fail "cluster did not recover after restart"
 fi
 
-got="$(cmo_app "$container" GET cmo:smoke | tr -d '\r')"
+got="$(cmo_app "$container" GET "$smoke_key" | tr -d '\r')"
 [[ "$got" == "persisted" ]] || fail "value did not survive restart: '${got}'"
+cmo_app "$container" DEL "$smoke_key" >/dev/null || true
 
 echo "smoke: ok (${topology}, cmo_version marker present, auth required, app user restricted, data persisted)"

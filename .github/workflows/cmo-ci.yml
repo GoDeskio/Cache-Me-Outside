@@ -48,10 +48,55 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
+      - name: Prove tests cannot touch a default-project container
+        run: |
+          set -eu
+          docker volume create cache-me-outside-data
+          docker run -d --name cache-me-outside \
+            -v cache-me-outside-data:/data \
+            alpine:3.20 sleep 86400
+          docker exec cache-me-outside sh -c 'echo keep-me > /data/marker'
+          cd deploy
+          # Refusal has to happen before any delete. These overrides name the
+          # default project. The scripts must exit before they call down or kill.
+          set +e
+          env CMO_PROJECT=cache-me-outside CMO_NETWORK=cache-me-outside CMO_NAME_PREFIX=cache-me-outside \
+            ./smoke.sh --no-up
+          smoke_rc=$?
+          env CMO_PROJECT=cache-me-outside CMO_NETWORK=cache-me-outside CMO_NAME_PREFIX=cache-me-outside \
+            ./sentinel-failover.sh --no-up
+          fail_rc=$?
+          env CMO_PROJECT=cache-me-outside CMO_NETWORK=cache-me-outside CMO_NAME_PREFIX=cache-me-outside \
+            ./cluster-scale-test.sh
+          scale_rc=$?
+          set -e
+          test "$smoke_rc" -ne 0
+          test "$fail_rc" -ne 0
+          test "$scale_rc" -ne 0
+          docker exec cache-me-outside cat /data/marker | grep -qx keep-me
+          # A test-project down must not remove the stand-in volume or container.
+          env CMO_PROJECT=cmo-test CMO_NETWORK=cmo-test CMO_NAME_PREFIX=cmo-test ./down.sh
+          docker exec cache-me-outside cat /data/marker | grep -qx keep-me
+          echo "CMO_PROJECT=cmo-test" >> "$GITHUB_ENV"
+          echo "CMO_NETWORK=cmo-test" >> "$GITHUB_ENV"
+          echo "CMO_NAME_PREFIX=cmo-test" >> "$GITHUB_ENV"
+
       - name: Build, standalone smoke, and a short benchmark
         run: |
           cd deploy
-          ./smoke.sh --generate-env
+          ./smoke.sh --generate-env --mutate
+          # The default smoke path must not raise memory or rewrite the env file.
+          before_mem="$(docker inspect --format '{{.HostConfig.Memory}}' cmo-test)"
+          before_env="$(grep '^CMO_MAXMEMORY=' .env)"
+          admin_pass="$(grep '^CMO_ADMIN_PASSWORD=' .env | cut -d= -f2-)"
+          before_max="$(docker exec -e VALKEYCLI_AUTH="$admin_pass" cmo-test valkey-cli -h 127.0.0.1 -p 6379 --user admin --no-auth-warning CONFIG GET maxmemory | awk 'NR==2')"
+          ./smoke.sh --no-up
+          after_mem="$(docker inspect --format '{{.HostConfig.Memory}}' cmo-test)"
+          after_env="$(grep '^CMO_MAXMEMORY=' .env)"
+          after_max="$(docker exec -e VALKEYCLI_AUTH="$admin_pass" cmo-test valkey-cli -h 127.0.0.1 -p 6379 --user admin --no-auth-warning CONFIG GET maxmemory | awk 'NR==2')"
+          test "$before_mem" = "$after_mem"
+          test "$before_env" = "$after_env"
+          test "$before_max" = "$after_max"
           CMO_BENCH_REQUESTS=10000 CMO_BENCH_CLIENTS=10 ./bench.sh
           docker image ls cache-me-outside:local
           ./down.sh
@@ -60,7 +105,7 @@ jobs:
         run: |
           cd deploy
           CMO_REPLICAS=1 CMO_SENTINEL_DOWN_AFTER_MS=2000 CMO_SENTINEL_FAILOVER_TIMEOUT=20000 \
-            ./smoke.sh sentinel
+            ./smoke.sh --mutate sentinel
           ./sentinel-failover.sh --no-up
           ./down.sh
 
@@ -69,6 +114,54 @@ jobs:
           cd deploy
           CMO_CLUSTER_PRIMARIES=3 CMO_CLUSTER_REPLICAS=0 ./cluster-scale-test.sh
           ./down.sh
+
+      - name: Default-project stand-in is still intact
+        run: |
+          docker exec cache-me-outside cat /data/marker | grep -qx keep-me
+          docker rm -f cache-me-outside
+          docker volume rm cache-me-outside-data
+
+  autocrlf:
+    name: Image build with autocrlf
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Refresh the worktree with core.autocrlf=true and build
+        run: |
+          set -eu
+          git config core.autocrlf true
+          git rm -rf --cached . >/dev/null
+          git reset --hard
+          python3 - <<'PY'
+          import os, sys
+          bad = []
+          for root, dirs, files in os.walk("."):
+              if ".git" in dirs:
+                  dirs.remove(".git")
+              for name in files:
+                  path = os.path.join(root, name)
+                  rel = path[2:] if path.startswith("./") else path
+                  interesting = (
+                      name == "Makefile"
+                      or rel.startswith("src/")
+                      or name.endswith(".tcl")
+                      or name.endswith(".sh")
+                      or rel.startswith("deploy/")
+                  )
+                  if not interesting:
+                      continue
+                  data = open(path, "rb").read()
+                  if b"\r\n" in data or data.endswith(b"\r"):
+                      bad.append(rel)
+          if bad:
+              print("CRLF line endings after autocrlf checkout:")
+              print("\n".join(bad))
+              sys.exit(1)
+          PY
+          docker build -t cache-me-outside:autocrlf .
 
   package:
     name: Debian package smoke
