@@ -280,8 +280,10 @@ acl_file="${CMO_RUNTIME_DIR}/cmo-users.acl"
             # Other Sentinels authenticate with this user for hello and quorum checks.
             printf '%s\n' "user ${sentinel_user} on >${sentinel_pass} ~* &* +@all -@dangerous -@admin +ping +subscribe +unsubscribe +psubscribe +punsubscribe +publish +sentinel|is-master-down-by-addr +sentinel|get-master-addr-by-name +sentinel|get-primary-addr-by-name +sentinel|sentinels +sentinel|replicas +sentinel|slaves +sentinel|masters +sentinel|primaries"
         else
-            # Sentinel's auth-user on a data node. Failover sends REPLICAOF, CONFIG REWRITE, and CLIENT KILL.
-            printf '%s\n' "user ${sentinel_user} on >${sentinel_pass} ~* &* +ping +info +replconf +multi +exec +role +replicaof +slaveof +failover +config|rewrite +config|get +config|set +client|setname +client|kill"
+            # Sentinel's auth-user on a data node. Failover sends REPLICAOF, CONFIG REWRITE,
+            # and CLIENT KILL. Sentinels also PUBLISH and SUBSCRIBE the hello channel here;
+            # without that they never see each other and quorum cannot be reached.
+            printf '%s\n' "user ${sentinel_user} on >${sentinel_pass} ~* &* +ping +info +replconf +multi +exec +role +replicaof +slaveof +failover +config|rewrite +config|get +config|set +client|setname +client|kill +subscribe +unsubscribe +psubscribe +punsubscribe +publish"
         fi
     fi
     if [ -n "$cluster_user" ] && [ "$CMO_ROLE" != "sentinel" ]; then
