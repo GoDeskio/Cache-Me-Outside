@@ -2092,6 +2092,8 @@ struct valkeyServer {
     int tcpkeepalive;            /* Set SO_KEEPALIVE if non-zero. */
     int active_expire_enabled;   /* Can be disabled for testing purposes. */
     int active_expire_effort;    /* From 1 (default) to 10, active effort. */
+    int cmo_warm_enabled;        /* Write a warm-restart checkpoint on clean shutdown. */
+    char *cmo_warm_file;         /* Checkpoint path. Must differ from dbfilename. */
     int lazy_expire_disabled;    /* If > 0, don't trigger lazy expire */
     int active_defrag_enabled;
     int skip_checksum_validation;                /* Disable checksum validation for RDB and RESTORE payload. */
@@ -4010,6 +4012,8 @@ void dbReplaceValue(serverDb *db, robj *key, robj **valref);
 #define SETKEY_DOESNT_EXIST 8
 #define SETKEY_ADD_OR_UPDATE 16 /* Key most likely doesn't exists */
 void setKey(client *c, serverDb *db, robj *key, robj **valref, int flags);
+void cmoWarmSave(void);
+void cmoWarmTryLoad(void);
 robj *dbRandomKey(serverDb *db);
 int dbGenericDelete(serverDb *db, robj *key, int async, int flags);
 int dbSyncDelete(serverDb *db, robj *key);
