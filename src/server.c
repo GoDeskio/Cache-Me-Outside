@@ -1363,6 +1363,7 @@ long long clientsTimeProc(struct aeEventLoop *eventLoop, long long id, void *cli
  * incrementally in the databases, such as active key expiring, resizing,
  * rehashing. */
 void databasesCron(void) {
+    if (server.cmo_hybrid_enabled) cmoHybridDrainPending();
     /* Expire keys by random sampling. Not required for replicas
      * as primary will synthesize DELs for us. */
     if (server.active_expire_enabled) {
@@ -5311,7 +5312,9 @@ int finishShutdown(void) {
     /* Fire the shutdown modules event. */
     moduleFireServerEvent(VALKEYMODULE_EVENT_SHUTDOWN, 0, NULL);
 
+    /* Snapshot while the flash log is still open, then close it. */
     cmoWarmSave();
+    cmoHybridClose();
 
     /* Remove the pid file if possible and needed. */
     if (server.daemonize || server.pidfile) {
@@ -7180,6 +7183,12 @@ sds genValkeyInfoString(dict *section_dict, int all_sections, int everything) {
         }
     }
 
+    if (all_sections || (dictFind(section_dict, "cmo_hybrid") != NULL)) {
+        if (sections++) info = sdscat(info, "\r\n");
+        info = sdscatprintf(info, "# Cmo_hybrid\r\n");
+        info = cmoHybridCatInfo(info);
+    }
+
     /* Hotkeys */
     if (all_sections || (dictFind(section_dict, "hotkeys") != NULL)) {
         if (sections++) info = sdscat(info, "\r\n");
@@ -8204,6 +8213,7 @@ __attribute__((weak)) int main(int argc, char **argv) {
         /* Things not needed when running in Sentinel mode. */
         serverLog(LL_NOTICE, "Server initialized");
         aofLoadManifestFromDisk();
+        cmoHybridOpen();
         loadDataFromDisk();
         aofOpenIfNeededOnServerStart();
         aofDelHistoryFiles();
