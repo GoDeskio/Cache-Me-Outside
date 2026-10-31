@@ -33,7 +33,7 @@ class T(unittest.TestCase):
         calls = []
         llm = lambda p: calls.append(p) or "Paris"
         self.assertEqual(self.c.get_or_call("t", "capital of france", llm), ("Paris", False))
-        self.assertEqual(self.c.get_or_call("t", "the capital of france", llm), ("Paris", True))
+        self.assertEqual(self.c.get_or_call("t", "Capital of France?", llm), ("Paris", True))
         self.assertEqual(len(calls), 1)
 
     def test_cosine_and_bad_threshold(self):
