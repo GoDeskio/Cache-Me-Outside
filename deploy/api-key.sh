@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Scoped, expiring API keys for the standalone node (plan item 63).
+# Scoped, expiring API keys for standalone, Sentinel and cluster (plan item 63).
 # Design: docs/cache-me-outside/api-keys-design.md
 #
 #   ./api-key.sh create --scope ro|rw [--prefix P] [--ttl-days N]
 #   ./api-key.sh list
 #   ./api-key.sh revoke key-<12hex>
 #   ./api-key.sh sweep            remove expired keys (run from cron)
+#   ./api-key.sh sync             after adding a node: copy keys to every node
 #
 # Records go to /data/cmo-keys on the volume (hash only) and are applied live
 # from the container's own renderer, so a restart produces the same users.
@@ -17,26 +18,72 @@ source ./lib.sh
 
 die() { echo "api-key: $*" >&2; exit 1; }
 cmo_load_env
-container="${CMO_KEYS_CONTAINER:-$(cmo_standalone_name)}"
 store=/data/cmo-keys
+
+# Data nodes that hold keys. Standalone: the one container. Sentinel and
+# cluster: every container in the compose project except sentinels, so a key
+# works on whichever node a client lands on and survives failover.
+# CMO_KEYS_CONTAINERS (space-separated) overrides discovery.
+targets() {
+    if [[ -n "${CMO_KEYS_CONTAINERS:-}" ]]; then
+        # shellcheck disable=SC2086 # intentional word split
+        printf '%s\n' $CMO_KEYS_CONTAINERS
+    elif [[ -n "${CMO_KEYS_CONTAINER:-}" ]]; then
+        printf '%s\n' "$CMO_KEYS_CONTAINER"
+    elif [[ "${CMO_TOPOLOGY:-standalone}" == standalone || "${CMO_TOPOLOGY:-}" == node ]]; then
+        cmo_standalone_name
+    else
+        cmo_apply_names
+        local c
+        docker ps --filter "label=com.docker.compose.project=${CMO_PROJECT}" --format '{{.Names}}' | sort |
+            while read -r c; do
+                [[ -n "$c" ]] || continue
+                [[ "$(docker exec "$c" printenv CMO_ROLE 2>/dev/null)" == sentinel ]] && continue
+                printf '%s\n' "$c"
+            done
+    fi
+}
+mapfile -t nodes < <(targets)
+((${#nodes[@]})) || die "no data containers found"
+container="${nodes[0]}"
+failmark="$(mktemp)"; rm -f -- "$failmark"
+trap 'rm -f -- "$failmark"' EXIT
+fail_on() { echo "api-key: $1" >&2; : >"$failmark"; }
 
 in_ct() { docker exec -i -u valkey "$container" sh -c "$1"; }
 read_store() { in_ct "cat ${store} 2>/dev/null || true"; }
-write_store() { in_ct "umask 077; cat > ${store}.new && mv ${store}.new ${store}"; }
+# Every node gets the same records so a restart anywhere renders the same users.
+write_store() {
+    local data c
+    data="$(cat)"
+    for c in "${nodes[@]}"; do
+        printf '%s\n' "$data" | sed '/^$/d' | docker exec -i -u valkey "$c" sh -c "umask 077; cat > ${store}.new && mv ${store}.new ${store}" ||
+            fail_on "could not write records on ${c}"
+    done
+}
 
 # Apply rendered lines for the given ids (all when none) via ACL SETUSER.
 apply() {
-    local line
-    while read -r line; do
-        [[ -n "$line" ]] || continue
-        # shellcheck disable=SC2086
-        set -- $line
-        shift # drop "user"
-        cmo_admin "$container" ACL SETUSER "$@" >/dev/null
-    done < <(docker exec -u valkey "$container" docker-entrypoint.sh --render-keys)
+    local line c
+    for c in "${nodes[@]}"; do
+        while read -r line; do
+            [[ -n "$line" ]] || continue
+            # shellcheck disable=SC2086
+            set -- $line
+            shift # drop "user"
+            cmo_admin "$c" ACL SETUSER "$@" >/dev/null ||
+                fail_on "ACL SETUSER failed on ${c}"
+        done < <(docker exec -u valkey "$c" docker-entrypoint.sh --render-keys)
+    done
 }
 
-deluser() { cmo_admin "$container" ACL DELUSER "$1" >/dev/null; }
+deluser() {
+    local c
+    for c in "${nodes[@]}"; do
+        cmo_admin "$c" ACL DELUSER "$1" >/dev/null ||
+            fail_on "ACL DELUSER failed on ${c}"
+    done
+}
 
 cmd="${1:-}"; shift || true
 case "$cmd" in
@@ -86,5 +133,12 @@ case "$cmd" in
         awk -v now="$now" '!($2 != 0 && $2 <= now)' <<<"$current" | write_store
         for id in $expired; do deluser "$id"; echo "expired ${id}"; done
         ;;
-    *) sed -n '2,10p' "$0"; exit 1 ;;
+    sync)
+        # After adding a node: copy records from the first node to all, reapply.
+        read_store | write_store
+        apply
+        echo "synced ${#nodes[@]} node(s)"
+        ;;
+    *) sed -n '2,11p' "$0"; exit 1 ;;
 esac
+[[ ! -e "$failmark" ]] || { echo "api-key: some nodes were not updated; rerun the same command" >&2; exit 1; }
