@@ -1,0 +1,19 @@
+{
+  "currency": "USD",
+  "free": {"id": "free", "memory_mb": 256, "max_conns": 30, "ops_per_sec": 200, "monthly_commands": 500000, "price_month": 0, "card_required": false, "shared": true},
+  "sizes": [
+    {"id": "s-1", "memory_mb": 1024, "vcpu": 1, "max_conns": 1000, "price_month": 15},
+    {"id": "s-2", "memory_mb": 2048, "vcpu": 1, "max_conns": 2000, "price_month": 30},
+    {"id": "m-4", "memory_mb": 4096, "vcpu": 2, "max_conns": 5000, "price_month": 60},
+    {"id": "m-8", "memory_mb": 8192, "vcpu": 2, "max_conns": 10000, "price_month": 120},
+    {"id": "l-16", "memory_mb": 16384, "vcpu": 4, "max_conns": 20000, "price_month": 240},
+    {"id": "l-32", "memory_mb": 32768, "vcpu": 8, "max_conns": 40000, "price_month": 480}
+  ],
+  "replica_multiplier": 1.0,
+  "commitments": [
+    {"years": 0, "discount": 0.0},
+    {"years": 1, "discount": 0.20},
+    {"years": 3, "discount": 0.40}
+  ],
+  "note": "Placeholder prices for Dustin to set. Nothing bills from this file yet."
+}
