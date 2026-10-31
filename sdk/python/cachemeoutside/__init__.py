@@ -36,11 +36,9 @@ def parse_url(url: str) -> ConnInfo:
         db = int(path)
     user = unquote(u.username) if u.username else None
     pw = unquote(u.password) if u.password is not None else None
-    if user is not None and pw is None:  # redis://:pw@ style handled below
-        pass
     if user == "":
         user = None
-    return ConnInfo(u.hostname, u.port or 6379, u.scheme.endswith("s"), user, pw, db)
+    return ConnInfo(u.hostname, u.port or 6379, u.scheme in ("rediss", "valkeys"), user, pw, db)
 
 
 def glide_config(info: ConnInfo, glide=None):
