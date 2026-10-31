@@ -1,0 +1,464 @@
+{
+  "editable": true,
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {},
+      "targets": [
+        {
+          "expr": "min(redis_up{namespace=~\"$namespace\", instance=~\"$instance\"})",
+          "legendFormat": "up",
+          "refId": "A"
+        }
+      ],
+      "title": "Up",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 4,
+        "y": 0
+      },
+      "id": 2,
+      "options": {},
+      "targets": [
+        {
+          "expr": "sum(redis_connected_clients{namespace=~\"$namespace\", instance=~\"$instance\"})",
+          "legendFormat": "clients",
+          "refId": "A"
+        }
+      ],
+      "title": "Connected clients",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 9,
+        "y": 0
+      },
+      "id": 3,
+      "options": {},
+      "targets": [
+        {
+          "expr": "sum(redis_memory_used_bytes{namespace=~\"$namespace\", instance=~\"$instance\"})",
+          "legendFormat": "used",
+          "refId": "A"
+        }
+      ],
+      "title": "Memory used",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 14,
+        "y": 0
+      },
+      "id": 4,
+      "options": {},
+      "targets": [
+        {
+          "expr": "sum(rate(redis_keyspace_hits_total{namespace=~\"$namespace\", instance=~\"$instance\"}[5m])) / clamp_min(sum(rate(redis_keyspace_hits_total{namespace=~\"$namespace\", instance=~\"$instance\"}[5m])) + sum(rate(redis_keyspace_misses_total{namespace=~\"$namespace\", instance=~\"$instance\"}[5m])), 1e-9)",
+          "legendFormat": "hit rate",
+          "refId": "A"
+        }
+      ],
+      "title": "Hit rate",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 19,
+        "y": 0
+      },
+      "id": 5,
+      "options": {},
+      "targets": [
+        {
+          "expr": "sum(redis_connected_slaves{namespace=~\"$namespace\", instance=~\"$instance\"})",
+          "legendFormat": "replicas",
+          "refId": "A"
+        }
+      ],
+      "title": "Replicas connected",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
+      "id": 6,
+      "options": {},
+      "targets": [
+        {
+          "expr": "sum by (instance) (rate(redis_commands_processed_total{namespace=~\"$namespace\", instance=~\"$instance\"}[1m]))",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Ops per second",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      },
+      "id": 7,
+      "options": {},
+      "targets": [
+        {
+          "expr": "sum by (instance) (redis_memory_used_bytes{namespace=~\"$namespace\", instance=~\"$instance\"})",
+          "legendFormat": "used {{instance}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (instance) (redis_memory_max_bytes{namespace=~\"$namespace\", instance=~\"$instance\"}) > 0",
+          "legendFormat": "max {{instance}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Memory used vs max",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 12
+      },
+      "id": 8,
+      "options": {},
+      "targets": [
+        {
+          "expr": "sum(rate(redis_keyspace_hits_total{namespace=~\"$namespace\", instance=~\"$instance\"}[1m]))",
+          "legendFormat": "hits",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(redis_keyspace_misses_total{namespace=~\"$namespace\", instance=~\"$instance\"}[1m]))",
+          "legendFormat": "misses",
+          "refId": "B"
+        }
+      ],
+      "title": "Hits and misses per second",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 12
+      },
+      "id": 9,
+      "options": {},
+      "targets": [
+        {
+          "expr": "sum(rate(redis_evicted_keys_total{namespace=~\"$namespace\", instance=~\"$instance\"}[5m]))",
+          "legendFormat": "evicted",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(redis_expired_keys_total{namespace=~\"$namespace\", instance=~\"$instance\"}[5m]))",
+          "legendFormat": "expired",
+          "refId": "B"
+        }
+      ],
+      "title": "Evicted and expired keys per second",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 20
+      },
+      "id": 10,
+      "options": {},
+      "targets": [
+        {
+          "expr": "topk(5, sum by (cmd) (rate(redis_commands_duration_seconds_total{namespace=~\"$namespace\", instance=~\"$instance\"}[5m])) / clamp_min(sum by (cmd) (rate(redis_commands_total{namespace=~\"$namespace\", instance=~\"$instance\"}[5m])), 1e-9))",
+          "legendFormat": "{{cmd}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Avg command latency (top 5 commands)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 20
+      },
+      "id": 11,
+      "options": {},
+      "targets": [
+        {
+          "expr": "sum(rate(redis_net_input_bytes_total{namespace=~\"$namespace\", instance=~\"$instance\"}[1m]))",
+          "legendFormat": "in",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(redis_net_output_bytes_total{namespace=~\"$namespace\", instance=~\"$instance\"}[1m]))",
+          "legendFormat": "out",
+          "refId": "B"
+        }
+      ],
+      "title": "Network bytes per second",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 28
+      },
+      "id": 12,
+      "options": {},
+      "targets": [
+        {
+          "expr": "sum by (db) (redis_db_keys{namespace=~\"$namespace\", instance=~\"$instance\"})",
+          "legendFormat": "{{db}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Keys per database",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 28
+      },
+      "id": 13,
+      "options": {},
+      "targets": [
+        {
+          "expr": "min by (instance) (redis_master_link_up{namespace=~\"$namespace\", instance=~\"$instance\"})",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Replication link up",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": [
+    "cache-me-outside"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "name": "datasource",
+        "query": "prometheus",
+        "type": "datasource"
+      },
+      {
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(redis_up, namespace)",
+        "includeAll": true,
+        "multi": true,
+        "name": "namespace",
+        "query": {
+          "query": "label_values(redis_up, namespace)",
+          "refId": "namespace"
+        },
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${datasource}"
+        },
+        "definition": "label_values(redis_up{namespace=~\"$namespace\"}, instance)",
+        "includeAll": true,
+        "multi": true,
+        "name": "instance",
+        "query": {
+          "query": "label_values(redis_up{namespace=~\"$namespace\"}, instance)",
+          "refId": "instance"
+        },
+        "refresh": 2,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "title": "Cache Me Outside overview",
+  "uid": "cmo-overview"
+}

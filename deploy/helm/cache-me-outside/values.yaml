@@ -99,6 +99,12 @@ metrics:
     interval: 30s
     scrapeTimeout: 10s
     labels: {}
+  # Grafana dashboard as a ConfigMap for the Grafana sidecar. The JSON is
+  # built by tools/grafana/build_dashboard.py.
+  grafanaDashboard:
+    enabled: false
+    label: grafana_dashboard
+    labelValue: "1"
 
 # Host ports are off. Turning them on publishes on one address, never every NIC.
 hostPort:
