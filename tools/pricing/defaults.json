@@ -1,0 +1,15 @@
+{
+  "currency": "USD",
+  "default_mode": "flat",
+  "plans": {
+    "free": {"price_month": "PLACEHOLDER"},
+    "s-1": {"price_month": "PLACEHOLDER", "gb_hour": "PLACEHOLDER"},
+    "s-2": {"price_month": "PLACEHOLDER", "gb_hour": "PLACEHOLDER"},
+    "m-4": {"price_month": "PLACEHOLDER", "gb_hour": "PLACEHOLDER"},
+    "m-8": {"price_month": "PLACEHOLDER", "gb_hour": "PLACEHOLDER"},
+    "l-16": {"price_month": "PLACEHOLDER", "gb_hour": "PLACEHOLDER"},
+    "l-32": {"price_month": "PLACEHOLDER", "gb_hour": "PLACEHOLDER"}
+  },
+  "gb_hour": "PLACEHOLDER",
+  "note": "Flat price per plan is the default. gb_hour is optional and used only when mode is gb_hour. Every rate is PLACEHOLDER until set. Nothing bills from a placeholder."
+}
