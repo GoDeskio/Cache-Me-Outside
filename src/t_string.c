@@ -33,6 +33,7 @@
  */
 
 #include "server.h"
+#include "crdt/peer.h"
 #include <math.h> /* isnan(), isinf() */
 
 /* Forward declarations */
@@ -171,6 +172,7 @@ void setGenericCommand(client *c,
 
     server.dirty++;
     notifyKeyspaceEvent(NOTIFY_STRING, "set", key, c->db->id);
+    crdtObserveString(c->db, key, val);
 
     if (expire) {
         /* Propagate as SET Key Value PXAT millisecond-timestamp if there is
@@ -763,6 +765,7 @@ void incrDecrCommand(client *c, long long incr) {
     notifyKeyspaceEvent(NOTIFY_STRING, "incrby", c->argv[1], c->db->id);
     server.dirty++;
     addReplyLongLong(c, value);
+    crdtObserveCounter(c->db, c->argv[1], incr);
 }
 
 void incrCommand(client *c) {

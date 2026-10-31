@@ -59,6 +59,7 @@
 #include "throttle_repl.h"
 #include "util.h"
 #include "forkless.h"
+#include "crdt/peer.h"
 
 #include "eval.h"
 #include "bgiteration.h"
@@ -1690,6 +1691,7 @@ long long serverCron(struct aeEventLoop *eventLoop, long long id, void *clientDa
 
     /* Handle background operations on databases. */
     databasesCron();
+    crdtCron();
 
     /* Start a scheduled AOF rewrite if this was requested by the user while
      * a BGSAVE was in progress. We don't start the rewrite if there is an
@@ -2555,6 +2557,7 @@ void initServerConfig(void) {
         server.command_response_cache[i] = NULL;
     }
     populateCommandTable();
+    crdtInit();
 
     /* Debugging */
     server.watchdog_period = 0;
@@ -4146,6 +4149,10 @@ int incrCommandStatsOnError(struct serverCommand *cmd, int flags) {
  */
 void call(client *c, int flags) {
     if (bgIteration_blockClientIfRequired(c)) return;
+    if (server.crdt_enabled && crdtCommandRejected(c)) {
+        addReplyError(c, "ERR command not supported on a CRDT database");
+        return;
+    }
 
     server.in_call++;
 

@@ -40,6 +40,7 @@
 #include "util.h"
 #include "vset.h"
 #include "server.h"
+#include "crdt/peer.h"
 #include "zmalloc.h"
 #include <math.h>
 #include <string.h>
@@ -1478,6 +1479,7 @@ void hdelCommand(client *c) {
     if (o->encoding == OBJ_ENCODING_HASHTABLE) hashtablePauseAutoShrink(objectGetVal(o));
     for (j = 2; j < c->argc; j++) {
         if (hashTypeDelete(o, objectGetVal(c->argv[j]))) {
+            crdtObserveHashDel(c->db, c->argv[1], objectGetVal(c->argv[j]));
             deleted++;
             if (hashTypeLength(o) == 0) {
                 if (hash_volatile_items) dbUntrackKeyWithVolatileItems(c->db, o);
@@ -1642,6 +1644,7 @@ void hsetCommand(client *c) {
     for (i = 2; i < c->argc; i += 2) {
         bool expired = false;
         created += !hashTypeSet(o, objectGetVal(c->argv[i]), objectGetVal(c->argv[i + 1]), EXPIRY_NONE, HASH_SET_COPY, &expired);
+        crdtObserveHashSet(c->db, c->argv[1], objectGetVal(c->argv[i]), objectGetVal(c->argv[i + 1]));
         /* NOTE - We do not need to track all expired items which are overitten in order to propagate them, since the replica will surely just override them
          * we just need to remember that we had such items to report the keyspace notification and update the stats */
         if (expired) expired_overwritten++;

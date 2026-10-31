@@ -591,6 +591,9 @@ ENGINE_SERVER_OBJ = \
     rand.o \
     rax.o \
     rdb.o \
+    crdt/hlc.o \
+    crdt/merge.o \
+    crdt/peer.o \
     rdma.o \
     release.o \
     replication.o \
