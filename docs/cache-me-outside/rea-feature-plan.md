@@ -166,3 +166,12 @@ Every item below is included. The phase sets the build order only. "Tool" means 
 | 125 | Bounded-staleness and exact-timestamp reads | Spanner paper | Router reads from replicas (#21) | Include (paper) | P3 |
 | 126 | Lock-free snapshot reads at a timestamp | Spanner paper | Lib built on #121 versions | Include (paper) | P3 |
 | 127 | Directory placement / geo-partitioning by key prefix | Spanner paper | Placement planner | Include (paper) | P4 |
+
+## Dustin additions (2026-11-01)
+
+| # | Feature | How CMO gets it | Status | Phase |
+|---|---|---|---|---|
+| 128 | Full CLI control: databases, limits, keys, stats, routes, backups and config through `cmoctl` (extends #23) | `cmoctl` subcommands for every management API action | Include | P1 |
+| 129 | AI agent tools that act (MCP server): create, resize, rotate, flush and inspect databases, with confirmation for destructive tools | `tools/mcp` stdio JSON-RPC server over the management API | Include | P1 |
+| 130 | Animated data-flow view on the dashboard: request → near cache → cache hit/miss → database query (extends #24) | Console SVG animation driven by a `/v1/flow` stats feed | Include (fun) | P2 |
+| 131 | Grafana for all analysis: provisioned datasource plus dashboards over the OTLP metrics (#40) | `deploy/grafana/` provisioning plus a dashboard JSON generator | Include | P1 |
