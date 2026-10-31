@@ -13,7 +13,9 @@ Config (JSON):
   {"tenants": {"acme": {"listen": "0.0.0.0:7001", "upstream": "127.0.0.1:6379",
                         "max_conns": 50, "ops_per_sec": 1000,
                         "bytes_per_sec": 5000000}}}
-Any limit may be 0 or omitted to mean unlimited. Standard library only.
+Any limit may be 0 or omitted to mean unlimited. Optional spending caps:
+  "budget": {"url": "https://billing.example/api"} or {"file": "caps.json"}
+(see cmo_budget.py). Standard library only.
 
   python3 cmo_proxy.py config.json
 """
@@ -188,7 +190,17 @@ def main(argv):
     if len(argv) != 2:
         print(__doc__)
         return 1
-    tenants = load(argv[1])
+    with open(argv[1]) as f:
+        cfg = json.load(f)
+    budget = None
+    b = cfg.get("budget")
+    if b:
+        import cmo_budget
+        src = (cmo_budget.HttpCapSource(b["url"]) if "url" in b
+               else cmo_budget.FileCapSource(b["file"]))
+        budget = cmo_budget.BudgetGuard(src, ttl=b.get("ttl", 30),
+                                        fail_open=b.get("fail_open", True))
+    tenants = load(argv[1], budget=budget)
 
     async def run():
         servers = await serve(tenants)
