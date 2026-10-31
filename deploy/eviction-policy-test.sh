@@ -18,5 +18,5 @@ grep -qx CMO_MAXMEMORY_POLICY=allkeys-lfu "$tmp" || fail "env not rewritten"
 [[ "$(grep -c CMO_MAXMEMORY_POLICY "$tmp")" == 1 ]] || fail "duplicate key"
 printf 'A=1\n' > "$tmp"; cmo_env_set "$tmp" CMO_MAXMEMORY_POLICY noeviction
 grep -qx CMO_MAXMEMORY_POLICY=noeviction "$tmp" || fail "env not appended"
-[[ "$(bash ./eviction-policy.sh --list | wc -l)" == 8 ]] || fail "--list should print 8 policies"
+[[ "$(env -u CMO_POLICY_LIB bash ./eviction-policy.sh --list | wc -l)" == 8 ]] || fail "--list should print 8 policies"
 echo "eviction-policy-test: ok"
