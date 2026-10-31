@@ -14,6 +14,7 @@ Endpoints (bearer token from env CMO_ADMIN_TOKEN, required):
   DELETE /v1/databases/{name}
   POST   /v1/databases/{name}/rotate-password
   GET    /v1/openapi.json
+  GET    /            web console (token is typed in the page, kept in memory only)
 
 The proxy reads its config at start, so restart it after changes.
 
@@ -217,6 +218,19 @@ def make_handler(mgr, token):
             self.end_headers()
             self.wfile.write(body)
 
+        def _console(self):
+            with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "console.html"), "rb") as f:
+                body = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Content-Security-Policy",
+                             "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'")
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.end_headers()
+            self.wfile.write(body)
+
         def _body(self):
             n = int(self.headers.get("Content-Length") or 0)
             if n > 65536:
@@ -230,6 +244,8 @@ def make_handler(mgr, token):
             return b
 
         def _route(self, method):
+            if method == "GET" and self.path.split("?")[0] in ("/", "/console"):
+                return self._console()
             try:
                 auth = self.headers.get("Authorization", "")
                 if not hmac.compare_digest(auth.encode(), ("Bearer " + token).encode()):

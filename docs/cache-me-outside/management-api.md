@@ -18,3 +18,9 @@ Notes:
 Not done yet:
 - **Terraform provider:** the plan also lists one. It needs a separate Go module that calls this API; that is a follow-up.
 - **Live test:** the API has not been run against a live server. The tests use a fake ACL backend.
+
+## Web console (plan item 61)
+
+Open `/` on the management API to use the console. Paste the admin token, give the new database a name, and click **Create database**. The page then shows the connection URL, a `valkey-cli` command, and the key prefix the database must use. The password is shown once. Each database also has a **New password** button.
+
+The page keeps the token in memory only; nothing is saved in the browser. It sends a strict CSP header and refuses to be framed. It inserts text with textContent only, never innerHTML.

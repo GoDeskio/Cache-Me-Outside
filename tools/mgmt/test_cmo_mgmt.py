@@ -71,6 +71,15 @@ class T(unittest.TestCase):
         self.assertNotIn("aa", self.acl.users)
         self.assertEqual(self.c("GET", "/v1/databases/aa")[0], 404)
 
+    def test_console_served_without_token_with_csp(self):
+        import urllib.request
+        with urllib.request.urlopen(self.base + "/") as r:
+            html = r.read().decode()
+            self.assertEqual(r.headers["X-Frame-Options"], "DENY")
+            self.assertIn("connect-src 'self'", r.headers["Content-Security-Policy"])
+        self.assertIn("Create database", html)
+        self.assertNotIn("innerHTML", html)
+
     def test_openapi(self):
         self.assertIn("/v1/databases", self.c("GET", "/v1/openapi.json")[1]["paths"])
 
