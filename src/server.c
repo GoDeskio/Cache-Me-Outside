@@ -59,6 +59,7 @@
 #include "throttle_repl.h"
 #include "util.h"
 #include "forkless.h"
+#include "tpc/tpc.h"
 
 #include "eval.h"
 #include "bgiteration.h"
@@ -7943,6 +7944,11 @@ __attribute__((weak)) int main(int argc, char **argv) {
     server.sentinel_mode = checkForSentinelMode(argc, argv, exec_name);
     initServerConfig();
     server.pid = getpid();
+    /* --engine=tpc --tpc-shards N>1 replaces this process with the research
+     * prototype. One shard strips the flags and keeps the stock engine. */
+    if (tpcConsumeArgs(&argc, &argv)) {
+        serverLog(LL_NOTICE, "TPC single-shard mode: stock command path, all slots on one core");
+    }
     ACLInit(); /* The ACL subsystem must be initialized ASAP because the
                   basic networking code and client creation depends on it. */
     moduleInitModulesSystem();
