@@ -25,8 +25,14 @@ func TestParse(t *testing.T) {
 
 type fake struct{ log [][]string }
 
-func (f *fake) Get(_ context.Context, k string) (string, error) { f.log = append(f.log, []string{"get", k}); return "", nil }
-func (f *fake) Set(_ context.Context, k, v string) error        { f.log = append(f.log, []string{"set", k, v}); return nil }
+func (f *fake) Get(_ context.Context, k string) (string, error) {
+	f.log = append(f.log, []string{"get", k})
+	return "", nil
+}
+func (f *fake) Set(_ context.Context, k, v string) error {
+	f.log = append(f.log, []string{"set", k, v})
+	return nil
+}
 func (f *fake) Del(_ context.Context, ks ...string) (int64, error) {
 	f.log = append(f.log, append([]string{"del"}, ks...))
 	return int64(len(ks)), nil

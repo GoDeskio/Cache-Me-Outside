@@ -92,8 +92,12 @@ func (t *TenantClient) Key(k string) string {
 	return t.Prefix + k
 }
 
-func (t *TenantClient) Get(ctx context.Context, k string) (string, error) { return t.Raw.Get(ctx, t.Key(k)) }
-func (t *TenantClient) Set(ctx context.Context, k, v string) error      { return t.Raw.Set(ctx, t.Key(k), v) }
+func (t *TenantClient) Get(ctx context.Context, k string) (string, error) {
+	return t.Raw.Get(ctx, t.Key(k))
+}
+func (t *TenantClient) Set(ctx context.Context, k, v string) error {
+	return t.Raw.Set(ctx, t.Key(k), v)
+}
 func (t *TenantClient) Del(ctx context.Context, keys ...string) (int64, error) {
 	p := make([]string, len(keys))
 	for i, k := range keys {
