@@ -19,7 +19,10 @@ COPY . .
 # distclean drops any host object files that slipped into the build context.
 RUN make distclean || true \
     && make -j"$(nproc)" BUILD_TLS=yes \
-    && make install BUILD_TLS=yes PREFIX=/opt/cmo
+    && make install BUILD_TLS=yes PREFIX=/opt/cmo \
+    && make -C modules/timeseries \
+    && mkdir -p /opt/cmo/lib \
+    && cp modules/timeseries/timeseries.so /opt/cmo/lib/timeseries.so
 
 FROM debian:bookworm-slim AS runtime
 
@@ -37,6 +40,7 @@ RUN apt-get update \
     && chmod 750 /data
 
 COPY --from=build /opt/cmo/bin/ /usr/local/bin/
+COPY --from=build /opt/cmo/lib/ /usr/local/lib/cmo/
 COPY deploy/valkey.conf /etc/cache-me-outside/valkey.conf
 COPY deploy/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY deploy/healthcheck.sh /usr/local/bin/healthcheck.sh
