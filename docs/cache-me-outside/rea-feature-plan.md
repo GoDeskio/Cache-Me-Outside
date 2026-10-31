@@ -97,3 +97,72 @@ The order below is build order, not inclusion. Nothing here is implemented yet.
 | 75 | Uptime SLA tiers (99.9 → 99.999) | Redis Cloud, ElastiCache | Topology-backed SLAs | Include | P3 |
 | 76 | Upgrade management / maintenance windows | all managed | Rolling replica-first upgrades | Include | P2 |
 | 77 | RDMA transport | Valkey (experimental) | Native build flag | Include (experimental) | P4 |
+
+## Wave 2 scan (2026-11-01): CacheLib, mcrouter, Pelikan/Twemcache, EVCache, Vitess, plus TAO/Bigtable/Spanner papers
+
+This was a static REA lab pass on a Windows host (no VM or WSL). Sources were shallow-cloned and parsed as text only. Nothing was built or run, and no code was copied. The pinned commits are:
+
+| Source | License | Commit | Reuse status |
+|---|---|---|---|
+| Meta CacheLib | Apache-2.0 | 4cc86ce | Rebuild independently (design study) |
+| Meta mcrouter | MIT | 649863b | Rebuild independently (design study) |
+| Pelikan | Apache-2.0 | cb2b7c0 | Rebuild independently |
+| Twitter Twemcache | BSD-3-Clause | 8cfc4ca | Rebuild independently |
+| Netflix EVCache | Apache-2.0 | 64c7a35 | Rebuild independently |
+| Vitess (pools, cache, tabletserver) | Apache-2.0 | 4d6bd71 | Rebuild independently |
+| TAO (USENIX ATC 2013), Bigtable (OSDI 2006), Spanner (OSDI 2012) | Papers only, no code | n/a | Rebuild from the published design |
+
+Every item below is included. The phase sets the build order only. "Tool" means a stdlib Python tool under `tools/`. "Engine" means C work that goes to `cmo-engine-briefs.md`.
+
+| # | Feature | Seen in | How CMO gets it | Status | Phase |
+|---|---|---|---|---|---|
+| 78 | Pluggable eviction: LRU, 2Q, TinyLFU and W-TinyLFU policy simulator and advisor | CacheLib MM*, Vitess tlfu | Tool: replay a trace and recommend a `maxmemory-policy` | Include (rebuild) | P2 |
+| 79 | Slab/pool rebalancing strategies (hits-per-slab, tail age, marginal hits) | CacheLib PoolRebalancer | Tool: per-tenant memory rebalancer | Include (rebuild) | P3 |
+| 80 | Hybrid DRAM + flash cache (large-item block cache, small-item hash) | CacheLib Navy | Engine, with #24 | Include (engine brief) | P4 |
+| 81 | Flash admission policy driven by a write budget | CacheLib NvmAdmissionPolicy | Tool plus engine hook | Include (rebuild) | P3 |
+| 82 | Large-value chunking (chained items) | CacheLib ChainedAllocs, EVCache ChunkTranscoder, mcrouter BigValueRoute | Client lib that splits and joins with a manifest | Include (rebuild) | P2 |
+| 83 | Warm restart from persisted memory | CacheLib persistence/shm | Engine brief (pairs with #12) | Include (engine brief) | P4 |
+| 84 | Size-aware object cache (native objects) | CacheLib object_cache | Client near-cache sizing on top of #49 | Include (rebuild) | P3 |
+| 85 | Background expired-item reaper tuning | CacheLib Reaper, Pelikan segcache | `active-expire-effort` presets plus a monitor | Include | P3 |
+| 86 | Memory monitor with free-memory strategies | CacheLib MemoryMonitor | Autoscaler signal (#39) | Include (rebuild) | P3 |
+| 87 | Trace-replay cache benchmark | CacheLib cachebench | Tool: replay trace, report hit ratio and latency | Include (rebuild) | P2 |
+| 88 | Weighted consistent-hash pools | mcrouter | Router lib | Include (rebuild) | P2 |
+| 89 | Failover and miss-failover routes | mcrouter | Router lib | Include (rebuild) | P2 |
+| 90 | Shadow traffic to a test pool | mcrouter ShadowRoute | Router lib | Include (rebuild) | P2 |
+| 91 | Cold-cache warm-up from a warm pool | mcrouter WarmUpRoute, EVCache warmer | Router lib plus warmer job | Include (rebuild) | P2 |
+| 92 | Replicated writes (all-sync, all-async, majority, initial) | mcrouter | Router lib | Include (rebuild) | P2 |
+| 93 | Prefix/key-based routing | mcrouter PrefixSelectorRoute | Router lib | Include (rebuild) | P2 |
+| 94 | Rate-limit and outstanding-request limit routes | mcrouter | Router lib | Include (rebuild) | P3 |
+| 95 | Latency/fault injection for chaos tests | mcrouter LatencyInjectionRoute | Router lib | Include (rebuild) | P3 |
+| 96 | L1/L2 split by value size | mcrouter L1L2SizeSplitRoute | Router lib | Include (rebuild) | P3 |
+| 97 | Key and TTL rewrite routes | mcrouter ModifyKey/ModifyExptime | Router lib | Include (rebuild) | P3 |
+| 98 | Async delete log with replay | mcrouter AsynclogRoute | Router lib | Include (rebuild) | P3 |
+| 99 | Slow warm-up for new hosts | mcrouter SlowWarmUpRoute | Router lib | Include (rebuild) | P3 |
+| 100 | Segment-structured TTL storage with proactive expiry | Pelikan segcache | Engine brief | Include (engine brief) | P4 |
+| 101 | Bloom filter data type | Pelikan bloom | valkey-bloom module (BSD-3) | Include | P2 |
+| 102 | Sampled command log (klog) | Twemcache | Tool: MONITOR sampler that redacts values | Include (rebuild) | P2 |
+| 103 | Selectable eviction strategy presets | Twemcache -M | Config presets (#43) | Include | P3 |
+| 104 | Zone-replicated writes with local-zone reads and fallback | EVCache | Client lib | Include (rebuild) | P2 |
+| 105 | Write latch policies (ONE, QUORUM, ALL_MINUS_1) | EVCache EVCacheLatch | Client lib | Include (rebuild) | P2 |
+| 106 | Bulk get with zone fallback | EVCache | Client lib | Include (rebuild) | P2 |
+| 107 | Client throttling and in-flight limits | EVCache ThrottleListener | Client lib | Include (rebuild) | P3 |
+| 108 | Request tracing spans | EVCache zipkin | OTLP spans (#53) | Include (rebuild) | P3 |
+| 109 | Query consolidation (single-flight for identical reads) | Vitess consolidator, cache/singleflight | Client lib | Include (rebuild) | P2 |
+| 110 | Plan/result cache sized by memory cost | Vitess cache, cached_size | Client lib | Include (rebuild) | P3 |
+| 111 | Connection pool with idle timeout, settings-aware pools and wait list | Vitess pools | Client lib | Include (rebuild) | P2 |
+| 112 | Query rules (deny lists by pattern or user) | Vitess rules | Proxy rules engine | Include (rebuild) | P3 |
+| 113 | Replication-lag-aware throttler | Vitess throttle, txthrottler | Tool for the write path | Include (rebuild) | P3 |
+| 114 | Per-user concurrency limiter | Vitess txlimiter | Proxy lib | Include (rebuild) | P3 |
+| 115 | Heartbeat-based replication lag tracker | Vitess heartbeat | Tool | Include (rebuild) | P2 |
+| 116 | Message queue with ack and redelivery | Vitess messager | Streams consumer-group helper | Include (rebuild) | P3 |
+| 117 | Graph objects and associations API (obj/assoc add, get, range, count) | TAO paper | Lib on hashes and sorted sets | Include (paper) | P2 |
+| 118 | Leader/follower cache tiers with write-through and invalidation | TAO paper | Router tiering (#21) | Include (paper) | P3 |
+| 119 | Read-after-write via version stamps | TAO paper | Client lib | Include (paper) | P3 |
+| 120 | Lease tokens against thundering herd and stale sets | TAO / memcache papers | Lib using SET NX tokens | Include (paper) | P2 |
+| 121 | Column families with timestamped versions and GC (max versions, max age) | Bigtable paper | Lib on hashes | Include (paper) | P3 |
+| 122 | Range sharding with tablet split and merge by size | Bigtable paper | Planner tool (#49) | Include (paper) | P3 |
+| 123 | Locality groups (hot vs cold column placement) | Bigtable paper | Tiering hint (#26) | Include (paper) | P4 |
+| 124 | Bounded-uncertainty timestamps with commit wait (HLC) | Spanner paper (TrueTime) | Lib | Include (paper) | P3 |
+| 125 | Bounded-staleness and exact-timestamp reads | Spanner paper | Router reads from replicas (#21) | Include (paper) | P3 |
+| 126 | Lock-free snapshot reads at a timestamp | Spanner paper | Lib built on #121 versions | Include (paper) | P3 |
+| 127 | Directory placement / geo-partitioning by key prefix | Spanner paper | Placement planner | Include (paper) | P4 |
