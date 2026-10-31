@@ -1365,6 +1365,10 @@ start_server {tags {"introspection"}} {
             forkless-infrastructure-enabled
             cmo-warm-enabled
             cmo-warm-file
+            cmo-hybrid-enabled
+            cmo-hybrid-file
+            cmo-hybrid-min-value
+            cmo-hybrid-max-bytes
         }
 
         if {!$::tls} {
