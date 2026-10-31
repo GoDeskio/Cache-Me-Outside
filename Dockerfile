@@ -10,6 +10,7 @@ RUN apt-get update \
         build-essential \
         ca-certificates \
         pkg-config \
+        libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
@@ -17,8 +18,8 @@ COPY . .
 
 # distclean drops any host object files that slipped into the build context.
 RUN make distclean || true \
-    && make -j"$(nproc)" \
-    && make install PREFIX=/opt/cmo
+    && make -j"$(nproc)" BUILD_TLS=yes \
+    && make install BUILD_TLS=yes PREFIX=/opt/cmo
 
 FROM debian:bookworm-slim AS runtime
 
@@ -26,6 +27,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
         gosu \
+        libssl3 \
+        openssl \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system --gid 999 valkey \
     && useradd --system --uid 999 --gid valkey --home-dir /data --shell /usr/sbin/nologin valkey \
