@@ -1,0 +1,16 @@
+{
+  "_comment": "PLACEHOLDER RATES - Dustin to set before use. The meter refuses to run while any rate in use is null.",
+  "billing_url": "https://billing.example.com",
+  "mode": "plan",
+  "plans": {
+    "starter":  {"monthly_cents": null, "_placeholder": "Dustin to set"},
+    "standard": {"monthly_cents": null, "_placeholder": "Dustin to set"},
+    "pro":      {"monthly_cents": null, "_placeholder": "Dustin to set"}
+  },
+  "gb_hour_cents": null,
+  "_gb_hour_placeholder": "Dustin to set; used only when mode is gb_hour (per tenant or global)",
+  "tenants": {
+    "acme": {"plan": "starter"},
+    "bigco": {"mode": "gb_hour", "host": "10.0.0.5", "port": 6379}
+  }
+}
