@@ -5,7 +5,9 @@ When a tenant is over its cap, every command gets
 `-ERR budget cap reached for this database` until spend drops or the cap is
 raised. Connections stay open; data is not deleted.
 
-## Hostrack-Billing side (not built yet)
+## Hostrack-Billing side
+
+Built in GoDeskio/Hostrack-Billing#34: base URL is `https://<billing host>/billing-api`, token is the billing `cmo`/`spend_token` secret. Contract:
 
 Hostrack-Billing needs to expose, over https:
 
