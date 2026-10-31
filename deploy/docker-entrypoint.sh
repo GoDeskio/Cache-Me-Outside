@@ -538,6 +538,18 @@ sed \
             printf '%s\n' "cluster-preferred-endpoint-type hostname"
         fi
     fi
+    # Optional modules (plan items 4 JSON, 5 bloom, 69 search, 70 vectors).
+    # CMO_MODULES is a space-separated list of names or .so paths; names map to
+    # /usr/local/lib/cmo-modules/<name>.so (built by Dockerfile.modules).
+    for m in ${CMO_MODULES:-}; do
+        case "$m" in
+            */*) so="$m" ;;
+            json|bloom|search) so="/usr/local/lib/cmo-modules/lib${m}.so" ;;
+            *) echo "Unknown module: $m (use json, bloom, search, or a .so path)" >&2; exit 1 ;;
+        esac
+        [ -r "$so" ] || { echo "Module file not found: $so" >&2; exit 1; }
+        printf '%s\n' "loadmodule ${so}"
+    done
 } > "${CMO_RUNTIME_DIR}/cmo-runtime.conf"
 chmod 600 "${CMO_RUNTIME_DIR}/cmo-runtime.conf"
 
