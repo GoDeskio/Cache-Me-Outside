@@ -2,6 +2,8 @@
 
 These are proposals. None of them are implemented in the foundation branch. They are the next changes that look worth doing on top of Valkey for this home-lab cache, in an order that keeps each one reviewable on its own.
 
+The full competitor-derived plan (77 features, phased) is in [rea-feature-plan.md](rea-feature-plan.md).
+
 ## Proposals
 
 1. **TLS on the listener.** Terminate TLS in `valkey-server` (`BUILD_TLS=yes` is already a Valkey build flag) with a certificate and key mounted from a Docker secret or an untracked file. Clients would verify the certificate. The current deployment is plaintext on a private address.
