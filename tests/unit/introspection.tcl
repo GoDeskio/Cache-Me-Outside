@@ -1369,6 +1369,7 @@ start_server {tags {"introspection"}} {
             cmo-hybrid-file
             cmo-hybrid-min-value
             cmo-hybrid-max-bytes
+            cmo-ttl-segment-ms
         }
 
         if {!$::tls} {

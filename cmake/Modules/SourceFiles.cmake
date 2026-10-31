@@ -29,6 +29,7 @@ set(VALKEY_SERVER_SRCS
     ${CMAKE_SOURCE_DIR}/src/object.c
     ${CMAKE_SOURCE_DIR}/src/cmo_warm.c
     ${CMAKE_SOURCE_DIR}/src/cmo_hybrid.c
+    ${CMAKE_SOURCE_DIR}/src/cmo_ttlseg.c
     ${CMAKE_SOURCE_DIR}/src/db.c
     ${CMAKE_SOURCE_DIR}/src/replication.c
     ${CMAKE_SOURCE_DIR}/src/rdb.c
