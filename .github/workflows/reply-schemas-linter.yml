@@ -9,7 +9,7 @@ on:
       - 'src/commands/*.json'
 
 concurrency:
-  group: reply-schemas-linter-${{ github.head_ref || github.ref }}
+  group: reply-schemas-linter-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
