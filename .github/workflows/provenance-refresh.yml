@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: provenance-refresh
+  cancel-in-progress: true
+
 jobs:
   refresh:
     if: github.repository == 'valkey-io/valkey'
