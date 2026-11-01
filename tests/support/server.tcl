@@ -422,6 +422,14 @@ proc run_external_server_test {code overrides} {
     dict set srv "host" $::host
     dict set srv "port" $::port
     set client [valkey $::host $::port 0 $::tls]
+    # One process serves the whole external suite. Clients left open by
+    # earlier files still count toward maxclients, so a later file that
+    # pins maxclients to a few connections is rejected. Drop those
+    # leftovers before this file starts. A nested start_server keeps the
+    # clients the outer test is still using.
+    if {[llength $::servers] == 0} {
+        catch {$client client kill skipme yes}
+    }
     dict set srv "client" $client
     if {!$::singledb} {
         $client select 9
