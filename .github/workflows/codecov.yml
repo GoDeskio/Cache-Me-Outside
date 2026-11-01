@@ -18,7 +18,7 @@ on:
       - '**/COPYING'
 
 concurrency:
-  group: codecov-${{ github.head_ref || github.ref }}
+  group: codecov-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:

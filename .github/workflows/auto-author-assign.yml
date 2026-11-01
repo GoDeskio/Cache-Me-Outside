@@ -7,6 +7,10 @@ on:
 permissions:
   pull-requests: write
 
+concurrency:
+  group: auto-author-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   assign-author:
     runs-on: ubuntu-latest
