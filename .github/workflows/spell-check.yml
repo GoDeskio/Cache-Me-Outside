@@ -10,7 +10,7 @@ on:
   pull_request:
 
 concurrency:
-  group: spellcheck-${{ github.head_ref || github.ref }}
+  group: spellcheck-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
