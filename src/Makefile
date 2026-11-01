@@ -541,6 +541,7 @@ ENGINE_SERVER_OBJ = \
     crc64.o \
     crccombine.o \
     crcspeed.o \
+    cmo_warm.o \
     db.o \
     debug.o \
     defrag.o \
