@@ -42,6 +42,10 @@ defaults:
 permissions:
   contents: read
 
+concurrency:
+  group: benchmark-ondemand-${{ inputs.pr_number }}
+  cancel-in-progress: true
+
 jobs:
   resolve-pr:
     if: github.repository == 'valkey-io/valkey'
