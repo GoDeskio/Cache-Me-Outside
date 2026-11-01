@@ -15,7 +15,7 @@ on:
     - cron: '0 2 * * *'
 
 concurrency:
-  group: external-${{ github.head_ref || github.ref }}
+  group: external-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
