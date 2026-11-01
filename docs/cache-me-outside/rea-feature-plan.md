@@ -54,13 +54,13 @@ The order below is build order, not inclusion. Nothing here is implemented yet.
 | 32 | Private networking (VPC peering / PrivateLink / PSC) | all managed | WireGuard/peering per tenant | Include | P3 |
 | 33 | IP allow-list / trusted sources | DO, Aiven, Upstash | Firewall per DB | Include | P2 |
 | 34 | Audit log of admin + ACL denials | Redis Cloud, Azure | ACL LOG shipper → SIEM (roadmap #5) | Include | P2 |
-| 35 | SSO/SAML + RBAC for console | Redis Cloud, Aiven | Team roles | Include | P3 |
-| 36 | Compliance pack (SOC2/HIPAA controls) | managed vendors | Process + evidence | Include | P4 |
+| 35 | SSO/SAML + RBAC for console | Redis Cloud, Aiven | Self-hosted Authentik (OIDC). Groups map to PR #45 roles | Include | P3 |
+| 36 | Compliance pack (SOC2/HIPAA controls) | managed vendors | SOC 2 readiness pack under docs/compliance | Include | P4 |
 | 37 | Multi-tenant isolation (DB per tenant, namespaces) | Upstash, Momento, Kvrocks namespaces | Container/VM per DB; namespace tokens for small plans | Include | P2 |
 | 38 | Noisy-neighbor limits (ops/s, conn, bandwidth) | Upstash, Momento | Per-tenant rate limits at proxy | Include | P2 |
 | 39 | Serverless (no node sizing, auto-scale) | ElastiCache Serverless, Upstash, Momento | Proxy + pooled cluster, slot rebalancing | Include (rebuild) | P3 |
-| 40 | Per-request / per-GB billing | Upstash, Momento, ElastiCache ECPU, Workers KV | Metering at proxy → Stripe usage records | Include | P3 |
-| 41 | Fixed-size node plans | DO, Aiven, Redis Cloud | Simple monthly price per size | Include | P1 |
+| 40 | Per-request / per-GB billing | Upstash, Momento, ElastiCache ECPU, Workers KV | Optional per-GB-hour. Default is a flat price per plan. Rates are PLACEHOLDER | Include | P3 |
+| 41 | Fixed-size node plans | DO, Aiven, Redis Cloud | Flat price per plan. The rate is PLACEHOLDER | Include | P1 |
 | 42 | Free tier | Upstash, Redis Cloud, Momento, Workers KV | Small shared DB, no card | Include | P2 |
 | 43 | Reserved/committed-use discount | ElastiCache, Azure | 1-3yr commit pricing | Include | P3 |
 | 44 | Budget caps / spend alerts | Upstash | Hard cap stops overage | Include | P2 |
@@ -94,7 +94,7 @@ The order below is build order, not inclusion. Nothing here is implemented yet.
 | 72 | AI agent memory / MCP server | Redis MCP, Upstash MCP | MCP server over management + data API | Include | P2 |
 | 73 | Strong consistency mode | Aerospike SC, Hazelcast CP | WAIT/WAITAOF + quorum writes option | Include (rebuild) | P4 |
 | 74 | Kubernetes operator | Redis Enterprise, Dragonfly operator | Helm shipped; operator later | Include | P3 |
-| 75 | Uptime SLA tiers (99.9 → 99.999) | Redis Cloud, ElastiCache | Topology-backed SLAs | Include | P3 |
+| 75 | Uptime SLA tiers (99.9 and 99.95) | Redis Cloud, ElastiCache | Offered tiers are 99.9% and 99.95% | Include | P3 |
 | 76 | Upgrade management / maintenance windows | all managed | Rolling replica-first upgrades | Include | P2 |
 | 77 | RDMA transport | Valkey (experimental) | Native build flag | Include (experimental) | P4 |
 
@@ -175,3 +175,13 @@ Every item below is included. The phase sets the build order only. "Tool" means 
 | 129 | AI agent tools that act (MCP server): create, resize, rotate, flush and inspect databases, with confirmation for destructive tools | `tools/mcp` stdio JSON-RPC server over the management API | Include | P1 |
 | 130 | Animated data-flow view on the dashboard: request → near cache → cache hit/miss → database query (extends #24) | Console SVG animation driven by a `/v1/flow` stats feed | Include (fun) | P2 |
 | 131 | Grafana for all analysis: provisioned datasource plus dashboards over the OTLP metrics (#40) | `deploy/grafana/` provisioning plus a dashboard JSON generator | Include | P1 |
+
+## Approved decisions (2026-10-31)
+
+The owner approved these. They override the earlier open ranges in the rows above.
+
+- **Pricing.** The default is a flat price per plan. A per-GB-hour rate is optional, per tenant or for the whole catalog. Every rate stays `PLACEHOLDER` until someone sets it. Code: `tools/pricing`.
+- **SLA.** The offered tiers are **99.9%** and **99.95%**. Code: `tools/sla`.
+- **Console sign-in.** Self-hosted Authentik, OIDC. Group claims map onto the roles from PR #45: `viewer`, `developer`, `admin`, `owner`. An IdP group does not grant `owner`. Code: `tools/console/authentik.py`.
+- **FIPS.** Optional build. `make BUILD_FIPS=yes` defines `CMO_BUILD_FIPS`. The default build does not. `INFO server` reports `cmo_fips_build`.
+- **SOC 2.** Readiness documents under `docs/compliance`. They are drafts for an audit, not a certification and not a claim that an audit has happened.

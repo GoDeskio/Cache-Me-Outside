@@ -6533,6 +6533,11 @@ sds genValkeyInfoString(dict *section_dict, int all_sections, int everything) {
                 "availability_zone:%s\r\n", server.availability_zone));
 
         info = sdscatfmt(info, "cmo_version:%s\r\n", CMO_VERSION);
+#ifdef CMO_BUILD_FIPS
+        info = sdscat(info, "cmo_fips_build:yes\r\n");
+#else
+        info = sdscat(info, "cmo_fips_build:no\r\n");
+#endif
 
         /* Conditional properties */
         if (isShutdownInitiated()) {

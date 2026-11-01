@@ -400,6 +400,13 @@ endif
 BUILD_NO:=0
 BUILD_YES:=1
 BUILD_MODULE:=2
+# Optional FIPS build. Off unless set. The flag marks the binary; a
+# FIPS-validated crypto module is still the operator's to link.
+BUILD_FIPS?=no
+ifeq ($(BUILD_FIPS),yes)
+	FINAL_CFLAGS+=-DCMO_BUILD_FIPS
+endif
+
 ifeq ($(BUILD_TLS),yes)
 	FINAL_CFLAGS+=-DUSE_OPENSSL=$(BUILD_YES) $(OPENSSL_CFLAGS) -DBUILD_TLS_MODULE=$(BUILD_NO)
 	FINAL_LDFLAGS+=$(OPENSSL_LDFLAGS)
@@ -735,6 +742,7 @@ persist-settings: distclean
 	echo PROG_SUFFIX=$(PROG_SUFFIX) >> .make-settings
 	echo MALLOC=$(MALLOC) >> .make-settings
 	echo BUILD_TLS=$(BUILD_TLS) >> .make-settings
+	echo BUILD_FIPS=$(BUILD_FIPS) >> .make-settings
 	echo OPENSSL_PREFIX=$(OPENSSL_PREFIX) >> .make-settings
 	echo BUILD_RDMA=$(BUILD_RDMA) >> .make-settings
 	echo BUILD_ZSTD=$(BUILD_ZSTD) >> .make-settings
