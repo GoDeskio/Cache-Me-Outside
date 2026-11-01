@@ -2094,6 +2094,10 @@ struct valkeyServer {
     int active_expire_effort;    /* From 1 (default) to 10, active effort. */
     int cmo_warm_enabled;        /* Write a warm-restart checkpoint on clean shutdown. */
     char *cmo_warm_file;         /* Checkpoint path. Must differ from dbfilename. */
+    int cmo_hybrid_enabled;      /* Spill large string values into a flash log. */
+    char *cmo_hybrid_file;       /* Flash log path. Required when hybrid is on. */
+    size_t cmo_hybrid_min_value; /* Minimum string size, in bytes, that can spill. */
+    size_t cmo_hybrid_max_bytes; /* Cap on the flash log. Further values stay in DRAM. */
     int lazy_expire_disabled;    /* If > 0, don't trigger lazy expire */
     int active_defrag_enabled;
     int skip_checksum_validation;                /* Disable checksum validation for RDB and RESTORE payload. */
@@ -4014,6 +4018,16 @@ void dbReplaceValue(serverDb *db, robj *key, robj **valref);
 void setKey(client *c, serverDb *db, robj *key, robj **valref, int flags);
 void cmoWarmSave(void);
 void cmoWarmTryLoad(void);
+void cmoHybridOpen(void);
+void cmoHybridClose(void);
+void cmoHybridObserveWrite(serverDb *db, robj *key, robj *val);
+void cmoHybridForgetObject(serverDb *db, robj *key);
+void cmoHybridForgetDb(int dbnum);
+void cmoHybridDrainPending(void);
+robj *cmoHybridPromote(serverDb *db, robj *key, robj *val);
+int cmoHybridIsSpilled(const robj *obj);
+sds cmoHybridMaterialize(const robj *obj);
+sds cmoHybridCatInfo(sds info);
 robj *dbRandomKey(serverDb *db);
 int dbGenericDelete(serverDb *db, robj *key, int async, int flags);
 int dbSyncDelete(serverDb *db, robj *key);
