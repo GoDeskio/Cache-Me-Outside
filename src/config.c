@@ -3714,6 +3714,10 @@ standardConfig static_configs[] = {
     createSpecialConfig("replicaof", "slaveof", IMMUTABLE_CONFIG | MULTI_ARG_CONFIG, setConfigReplicaOfOption, getConfigReplicaOfOption, rewriteConfigReplicaOfOption, NULL),
     createSpecialConfig("latency-tracking-info-percentiles", NULL, MODIFIABLE_CONFIG | MULTI_ARG_CONFIG, setConfigLatencyTrackingInfoPercentilesOutputOption, getConfigLatencyTrackingInfoPercentilesOutputOption, rewriteConfigLatencyTrackingInfoPercentilesOutputOption, NULL),
 
+    /* Warm restart. Off unless a checkpoint path is configured. */
+    createBoolConfig("cmo-warm-enabled", NULL, IMMUTABLE_CONFIG, server.cmo_warm_enabled, 0, NULL, NULL),
+    createStringConfig("cmo-warm-file", NULL, IMMUTABLE_CONFIG, EMPTY_STRING_IS_NULL, server.cmo_warm_file, NULL, NULL, NULL),
+
     /* NULL Terminator, this is dropped when we convert to the runtime array. */
     {NULL},
 };
