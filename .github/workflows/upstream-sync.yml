@@ -8,7 +8,7 @@ on:
 
 concurrency:
   group: cmo-upstream-sync
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: write
