@@ -25,6 +25,7 @@ CMO = "CMO"
 Redict = "Redict" # Redis fork
 Momento = "Momento" # cache service
 messager = "messager" # Vitess messager
+Hashi = "Hashi" # HashiCorp, which the checker splits before Corp
 
 [default.extend-identifiers]
 dbe = "dbe"
