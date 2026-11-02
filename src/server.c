@@ -1364,6 +1364,7 @@ long long clientsTimeProc(struct aeEventLoop *eventLoop, long long id, void *cli
  * rehashing. */
 void databasesCron(void) {
     if (server.cmo_hybrid_enabled) cmoHybridDrainPending();
+    if (server.cmo_ttl_segments) cmoTtlSegCron();
     /* Expire keys by random sampling. Not required for replicas
      * as primary will synthesize DELs for us. */
     if (server.active_expire_enabled) {
@@ -7192,6 +7193,12 @@ sds genValkeyInfoString(dict *section_dict, int all_sections, int everything) {
         if (sections++) info = sdscat(info, "\r\n");
         info = sdscatprintf(info, "# Cmo_hybrid\r\n");
         info = cmoHybridCatInfo(info);
+    }
+
+    if (all_sections || (dictFind(section_dict, "cmo_ttl") != NULL)) {
+        if (sections++) info = sdscat(info, "\r\n");
+        info = sdscatprintf(info, "# Cmo_ttl\r\n");
+        info = cmoTtlSegCatInfo(info);
     }
 
     /* Hotkeys */

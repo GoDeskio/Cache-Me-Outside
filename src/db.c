@@ -499,6 +499,7 @@ int dbGenericDeleteWithDictIndex(serverDb *db, robj *key, int async, int flags, 
     void **ref = kvstoreHashtableTwoPhasePopFindRef(db->keys, dict_index, objectGetVal(key), &pos);
     if (ref != NULL) {
         if (server.cmo_hybrid_enabled) cmoHybridForgetObject(db, key);
+        if (server.cmo_ttl_segments) cmoTtlSegOnUnexpire(db, key);
         bgIteration_keyDelete(db->id, (sds)objectGetVal(key));
         hotkeysRecordDelete(key, db->id, flags);
 
@@ -713,6 +714,7 @@ long long emptyData(int dbnum, int flags, void(callback)(hashtable *)) {
     /* Empty the database structure. */
     removed = emptyDbStructure(server.db, dbnum, async, callback);
     if (server.cmo_hybrid_enabled) cmoHybridForgetDb(dbnum);
+    if (server.cmo_ttl_segments) cmoTtlSegOnFlush(dbnum);
 
     if (hotkeysEnabled()) {
         if (dbnum == -1)
@@ -1949,6 +1951,7 @@ int removeExpire(serverDb *db, robj *key) {
     int dict_index = getKVStoreIndexUsingCachedSlot(objectGetVal(key));
     void *popped;
     if (kvstoreHashtablePop(db->expires, dict_index, objectGetVal(key), &popped)) {
+        if (server.cmo_ttl_segments) cmoTtlSegOnUnexpire(db, key);
         robj *val = popped;
         robj *newval = objectSetExpire(val, -1);
         serverAssert(newval == val);
@@ -2003,6 +2006,7 @@ robj *setExpire(client *c, serverDb *db, robj *key, long long when) {
 
     int writable_replica = server.primary_host && server.repl_replica_ro == 0;
     if (c && writable_replica && !c->flag.primary) rememberReplicaKeyWithExpire(db, key);
+    if (server.cmo_ttl_segments) cmoTtlSegOnExpire(db, key, when);
     return val;
 }
 

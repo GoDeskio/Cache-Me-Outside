@@ -3724,6 +3724,10 @@ standardConfig static_configs[] = {
     createSizeTConfig("cmo-hybrid-min-value", NULL, IMMUTABLE_CONFIG, 64, LLONG_MAX, server.cmo_hybrid_min_value, 4096, MEMORY_CONFIG, NULL, NULL),
     createSizeTConfig("cmo-hybrid-max-bytes", NULL, IMMUTABLE_CONFIG, 4096, LLONG_MAX, server.cmo_hybrid_max_bytes, (size_t)1024 * 1024 * 1024, MEMORY_CONFIG, NULL, NULL),
 
+    /* TTL segments. Off by default so expiry sampling is unchanged. */
+    createBoolConfig("cmo-ttl-segments", NULL, MODIFIABLE_CONFIG, server.cmo_ttl_segments, 0, NULL, NULL),
+    createLongLongConfig("cmo-ttl-segment-ms", NULL, IMMUTABLE_CONFIG, 1, 86400000LL, server.cmo_ttl_segment_ms, 1000, INTEGER_CONFIG, NULL, NULL),
+
     /* NULL Terminator, this is dropped when we convert to the runtime array. */
     {NULL},
 };
