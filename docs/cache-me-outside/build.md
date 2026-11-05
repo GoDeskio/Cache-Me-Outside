@@ -26,6 +26,8 @@ sudo apt-get install tcl tcl8.6 tclx
 
 `tests/unit/cmo-version.tcl` checks that `cmo_version` is `<valkey_version>-cmo` and that `valkey_version` has no suffix.
 
+FIPS mode is off unless you ask for it. `make BUILD_FIPS=yes` defines `CMO_BUILD_FIPS`. `INFO server` then reports `cmo_fips_build:yes`. The default build reports `no`. The flag does not fetch or enable a FIPS-validated crypto module. That link is still an operator step.
+
 ## Container image
 
 The Dockerfile compiles this tree. It does not download an upstream Valkey image for the runtime.

@@ -2086,13 +2086,21 @@ struct valkeyServer {
     durationStats duration_stats[EL_DURATION_TYPE_NUM];
 
     /* Configuration */
-    int verbosity;               /* Loglevel verbosity */
-    int hide_user_data_from_log; /* Hide or redact user data, or data that may contain user data, from the log. */
-    int maxidletime;             /* Client timeout in seconds */
-    int tcpkeepalive;            /* Set SO_KEEPALIVE if non-zero. */
-    int active_expire_enabled;   /* Can be disabled for testing purposes. */
-    int active_expire_effort;    /* From 1 (default) to 10, active effort. */
-    int lazy_expire_disabled;    /* If > 0, don't trigger lazy expire */
+    int verbosity;                /* Loglevel verbosity */
+    int hide_user_data_from_log;  /* Hide or redact user data, or data that may contain user data, from the log. */
+    int maxidletime;              /* Client timeout in seconds */
+    int tcpkeepalive;             /* Set SO_KEEPALIVE if non-zero. */
+    int active_expire_enabled;    /* Can be disabled for testing purposes. */
+    int active_expire_effort;     /* From 1 (default) to 10, active effort. */
+    int cmo_warm_enabled;         /* Write a warm-restart checkpoint on clean shutdown. */
+    char *cmo_warm_file;          /* Checkpoint path. Must differ from dbfilename. */
+    int cmo_hybrid_enabled;       /* Spill large string values into a flash log. */
+    char *cmo_hybrid_file;        /* Flash log path. Required when hybrid is on. */
+    size_t cmo_hybrid_min_value;  /* Minimum string size, in bytes, that can spill. */
+    size_t cmo_hybrid_max_bytes;  /* Cap on the flash log. Further values stay in DRAM. */
+    int cmo_ttl_segments;         /* Group key expiry into time buckets. */
+    long long cmo_ttl_segment_ms; /* Bucket width. Expiry is rounded up to this. */
+    int lazy_expire_disabled;     /* If > 0, don't trigger lazy expire */
     int active_defrag_enabled;
     int skip_checksum_validation;                /* Disable checksum validation for RDB and RESTORE payload. */
     int rdb_version_check;                       /* Try to load RDB produced by a future version. */
@@ -4010,6 +4018,23 @@ void dbReplaceValue(serverDb *db, robj *key, robj **valref);
 #define SETKEY_DOESNT_EXIST 8
 #define SETKEY_ADD_OR_UPDATE 16 /* Key most likely doesn't exists */
 void setKey(client *c, serverDb *db, robj *key, robj **valref, int flags);
+void cmoWarmSave(void);
+void cmoWarmTryLoad(void);
+void cmoHybridOpen(void);
+void cmoHybridClose(void);
+void cmoHybridObserveWrite(serverDb *db, robj *key, robj *val);
+void cmoHybridForgetObject(serverDb *db, robj *key);
+void cmoHybridForgetDb(int dbnum);
+void cmoHybridDrainPending(void);
+robj *cmoHybridPromote(serverDb *db, robj *key, robj *val);
+int cmoHybridIsSpilled(const robj *obj);
+sds cmoHybridMaterialize(const robj *obj);
+sds cmoHybridCatInfo(sds info);
+void cmoTtlSegOnExpire(serverDb *db, robj *key, long long when_ms);
+void cmoTtlSegOnUnexpire(serverDb *db, robj *key);
+void cmoTtlSegOnFlush(int dbnum);
+void cmoTtlSegCron(void);
+sds cmoTtlSegCatInfo(sds info);
 robj *dbRandomKey(serverDb *db);
 int dbGenericDelete(serverDb *db, robj *key, int async, int flags);
 int dbSyncDelete(serverDb *db, robj *key);
