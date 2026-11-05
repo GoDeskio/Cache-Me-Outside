@@ -30,6 +30,7 @@
 #include "server.h"
 #include "crdt/peer.h"
 #include "rdb_forkless.h"
+#include "tier/tier.h"
 #include "listpack.h"
 #include "hotkeys.h"
 #include "ordered_index.h"
@@ -127,6 +128,8 @@ robj *lookupKey(serverDb *db, robj *key, int flags) {
             val->lru = lrulfu_touch(val->lru);
         }
 
+        if (server.tiering_enabled && objectGetType(val) == OBJ_STRING && objectGetEncoding(val) == OBJ_ENCODING_TIERED)
+            val = tierPromote(db, key, val);
         if (!(flags & (LOOKUP_NOSTATS | LOOKUP_WRITE))) server.stat_keyspace_hits++;
         /* TODO: Use separate hits stats for WRITE */
     } else {
