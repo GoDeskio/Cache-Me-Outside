@@ -1,0 +1,10 @@
+[project]
+name = "cachemeoutside"
+version = "0.1.0"
+description = "Thin Python client for Cache Me Outside (wraps valkey-glide)"
+requires-python = ">=3.9"
+dependencies = ["valkey-glide>=2,<3"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
