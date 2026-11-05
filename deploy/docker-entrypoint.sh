@@ -566,6 +566,24 @@ sed \
             esac
         fi
     fi
+    # TLS in transit (plan item 27). Set CMO_TLS_CERT/KEY/CA to enable.
+    # CMO_TLS_ONLY=yes closes the plain port; CMO_TLS_MTLS=yes requires client certs.
+    if [ -n "${CMO_TLS_CERT:-}" ]; then
+        for f in "$CMO_TLS_CERT" "${CMO_TLS_KEY:?CMO_TLS_KEY is required with CMO_TLS_CERT}" "${CMO_TLS_CA:?CMO_TLS_CA is required with CMO_TLS_CERT}"; do
+            [ -r "$f" ] || { echo "TLS file not readable: $f" >&2; exit 1; }
+        done
+        printf '%s\n' "tls-port ${CMO_TLS_PORT:-6380}"
+        printf '%s\n' "tls-cert-file ${CMO_TLS_CERT}"
+        printf '%s\n' "tls-key-file ${CMO_TLS_KEY}"
+        printf '%s\n' "tls-ca-cert-file ${CMO_TLS_CA}"
+        printf '%s\n' "tls-auth-clients $([ "${CMO_TLS_MTLS:-no}" = yes ] && echo yes || echo no)"
+        printf '%s\n' "tls-protocols \"TLSv1.2 TLSv1.3\""
+        printf '%s\n' "tls-replication yes"
+        printf '%s\n' "tls-cluster yes"
+        if [ "${CMO_TLS_ONLY:-no}" = yes ]; then
+            printf '%s\n' "port 0"
+        fi
+    fi
     if [ "$CMO_CLUSTER_ENABLED" = "yes" ]; then
         printf '%s\n' "cluster-enabled yes"
         printf '%s\n' "cluster-config-file ${CMO_DATA_DIR}/nodes.conf"
