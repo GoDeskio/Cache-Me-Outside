@@ -29,6 +29,7 @@
 
 #include "server.h"
 #include "crdt/peer.h"
+#include "rdb_forkless.h"
 #include "listpack.h"
 #include "hotkeys.h"
 #include "ordered_index.h"
@@ -86,6 +87,8 @@ static robj *dbFindWithDictIndex(serverDb *db, sds key, int dict_index);
  * expired on replicas even if the primary is lagging expiring our key via DELs
  * in the replication link. */
 robj *lookupKey(serverDb *db, robj *key, int flags) {
+    /* Capture the pre-image before expiry or the caller mutates the value. */
+    if ((flags & LOOKUP_WRITE) && snapshotForklessInProgress()) snapshotForklessBeforeWrite(db, key);
     int dict_index = getKVStoreIndexUsingCachedSlot(objectGetVal(key));
     robj *val = dbFindWithDictIndex(db, objectGetVal(key), dict_index);
     if (val) {
@@ -546,6 +549,7 @@ int dbGenericDeleteWithDictIndex(serverDb *db, robj *key, int async, int flags, 
 
 /* Helper for sync and async delete. */
 int dbGenericDelete(serverDb *db, robj *key, int async, int flags) {
+    snapshotForklessBeforeWrite(db, key);
     int dict_index = getKVStoreIndexForKey(objectGetVal(key));
     return dbGenericDeleteWithDictIndex(db, key, async, flags, dict_index);
 }
@@ -858,6 +862,7 @@ void flushAllDataAndResetRDB(int flags) {
     server.dirty += emptyData(-1, flags, NULL);
     if (isForkBgsaveInProgress()) killRDBChild();
     if (isForklessSaveInProgress()) forklessSaveCancel();
+    if (snapshotForklessInProgress()) snapshotForklessCancel();
     if (server.child_type == CHILD_TYPE_SLOT_MIGRATION) killSlotMigrationChild();
     if (server.saveparamslen > 0) {
         rdbSaveInfo rsi, *rsiptr;

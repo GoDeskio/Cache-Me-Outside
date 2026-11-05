@@ -604,6 +604,7 @@ ENGINE_SERVER_OBJ = \
     crdt/hlc.o \
     crdt/merge.o \
     crdt/peer.o \
+    rdb_forkless.o \
     rdma.o \
     release.o \
     replication.o \

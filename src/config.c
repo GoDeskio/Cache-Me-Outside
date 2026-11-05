@@ -189,6 +189,10 @@ configEnum bgsave_method_enum[] = {{"fork", RDB_BGSAVE_TYPE_FORK},
                                    {"forkless", RDB_BGSAVE_TYPE_FORKLESS},
                                    {NULL, 0}};
 
+configEnum snapshot_mode_enum[] = {{"fork", SNAPSHOT_MODE_FORK},
+                                   {"forkless", SNAPSHOT_MODE_FORKLESS},
+                                   {NULL, 0}};
+
 configEnum cluster_replica_no_failover_enum[] = {{"no", CLUSTER_REPLICA_NO_FAILOVER_NO},
                                                  {"yes", CLUSTER_REPLICA_NO_FAILOVER_YES},
                                                  {"if-empty", CLUSTER_REPLICA_NO_FAILOVER_IF_EMPTY},
@@ -2475,8 +2479,8 @@ static void numericConfigRewrite(standardConfig *config, const char *name, struc
     }
 
 #define createSpecialConfig(name, alias, modifiable, setfn, getfn, rewritefn, applyfn) \
-    {.type = SPECIAL_CONFIG,                                                           \
-     embedCommonConfig(name, alias, modifiable) embedConfigInterface(NULL, setfn, getfn, rewritefn, applyfn)}
+    { .type = SPECIAL_CONFIG,                                                          \
+      embedCommonConfig(name, alias, modifiable) embedConfigInterface(NULL, setfn, getfn, rewritefn, applyfn) }
 
 static int isValidBgsaveDefaultMethod(int val, const char **err) {
     /* During startup config parsing the directives are applied one by one, so
@@ -3449,6 +3453,8 @@ standardConfig static_configs[] = {
     createBoolConfig("activerehashing", NULL, MODIFIABLE_CONFIG, server.activerehashing, 1, NULL, NULL),
     createBoolConfig("stop-writes-on-bgsave-error", NULL, MODIFIABLE_CONFIG, server.stop_writes_on_bgsave_err, 1, NULL, NULL),
     createEnumConfig("bgsave-default-method", NULL, MODIFIABLE_CONFIG, bgsave_method_enum, server.bgsave_default_method, RDB_BGSAVE_TYPE_FORK, isValidBgsaveDefaultMethod, NULL),
+    createEnumConfig("snapshot-mode", NULL, MODIFIABLE_CONFIG, snapshot_mode_enum, server.snapshot_mode, SNAPSHOT_MODE_FORK, NULL, NULL),
+    createIntConfig("snapshot-forkless-slice-keys", NULL, MODIFIABLE_CONFIG, 1, 1000000, server.snapshot_forkless_slice_keys, 64, INTEGER_CONFIG, NULL, NULL),
     createBoolConfig("set-proc-title", NULL, IMMUTABLE_CONFIG, server.set_proc_title, 1, NULL, NULL), /* Should setproctitle be used? */
     createBoolConfig("lazyfree-lazy-eviction", NULL, DEBUG_CONFIG | MODIFIABLE_CONFIG, server.lazyfree_lazy_eviction, 1, NULL, NULL),
     createBoolConfig("lazyfree-lazy-expire", NULL, DEBUG_CONFIG | MODIFIABLE_CONFIG, server.lazyfree_lazy_expire, 1, NULL, NULL),
