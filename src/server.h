@@ -170,7 +170,7 @@ struct ValkeyModule;
 #define CONFIG_DEFAULT_PID_FILE "/var/run/valkey.pid"
 #define CONFIG_DEFAULT_BINDADDR_COUNT 2
 #define CONFIG_DEFAULT_BINDADDR \
-    {"*", "-::*"}
+    { "*", "-::*" }
 #define CONFIG_BINDADDR_MAX 16
 #define CONFIG_MIN_RESERVED_FDS 32
 #define CONFIG_DEFAULT_PROC_TITLE_TEMPLATE "{title} {listen-addr} {server-mode}"
@@ -695,6 +695,10 @@ typedef enum {
     RDB_BGSAVE_TYPE_FORK = 1,    /* Fork-based bgsave. */
     RDB_BGSAVE_TYPE_FORKLESS = 2 /* Forkless bgsave. */
 } rdbBgsaveType;
+
+/* Main-thread incremental snapshot. Independent of bgsave-default-method. */
+#define SNAPSHOT_MODE_FORK 0
+#define SNAPSHOT_MODE_FORKLESS 1
 
 /* Replica failover policy for server.cluster_replica_no_failover. */
 typedef enum {
@@ -1733,7 +1737,8 @@ typedef struct rdbSaveInfo {
     bool loaded_compressed;               /* True if rdbLoad() read a streaming-compressed file. */
 } rdbSaveInfo;
 
-#define RDB_SAVE_INFO_INIT {-1, 0, "0000000000000000000000000000000000000000", -1, false}
+#define RDB_SAVE_INFO_INIT \
+    { -1, 0, "0000000000000000000000000000000000000000", -1, false }
 
 struct malloc_stats {
     size_t zmalloc_used;
@@ -2216,6 +2221,8 @@ struct valkeyServer {
     int crdt_region_id;
     char *crdt_peers;
     long long crdt_tombstone_gc_ms;
+    int snapshot_mode;                    /* SNAPSHOT_MODE_FORK or SNAPSHOT_MODE_FORKLESS */
+    int snapshot_forkless_slice_keys;     /* Max keys written per cron tick in forkless mode */
     int key_load_delay;                   /* Delay in microseconds between keys while
                                            * loading aof or rdb. (for testings). negative
                                            * value means fractions of microseconds (on average). */

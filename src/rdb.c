@@ -50,6 +50,7 @@
 #include "compression.h"
 #include "compression_stream.h"
 #include "forkless.h"
+#include "rdb_forkless.h"
 
 #include <math.h>
 #include <fcntl.h>
@@ -1813,6 +1814,10 @@ int rdbSaveToFile(const char *filename) {
 /* Save the DB on disk. Return C_ERR on error, C_OK on success. */
 int rdbSave(int req, char *filename, rdbSaveInfo *rsi, int rdbflags) {
     char tmpfile[256];
+    /* A synchronous save replaces an in-progress incremental snapshot.
+     * The incremental file has not been renamed yet, so the previous dump
+     * is still the live file until this save finishes. */
+    if (snapshotForklessInProgress()) snapshotForklessCancel();
     char cwd[MAXPATHLEN]; /* Current working dir path for error messages. */
 
     startSaving(rdbflags);
@@ -1855,7 +1860,7 @@ int isForkBgsaveInProgress(void) {
 }
 
 int isSaveInProgress(void) {
-    return isForkBgsaveInProgress() || isForklessSaveInProgress();
+    return isForkBgsaveInProgress() || isForklessSaveInProgress() || snapshotForklessInProgress();
 }
 
 /* Choose the background save method based on configuration. Returns forkless
@@ -1879,6 +1884,7 @@ int resolveBgsaveType(void) {
 
 /* Start a background save, choosing fork or forkless based on bgsave_type. */
 int rdbStartBgsave(int bgsave_type) {
+    if (server.snapshot_mode == SNAPSHOT_MODE_FORKLESS) return snapshotForklessStart(server.rdb_filename);
     if (bgsave_type == RDB_BGSAVE_TYPE_FORKLESS) {
         return forklessSaveToDisk(server.rdb_filename);
     } else {
@@ -4541,6 +4547,10 @@ void bgsaveCommand(client *c) {
                 serverLog(LL_NOTICE, "Background saving (forkless) will be aborted due to user request");
                 forklessSaveCancel();
                 addReplyStatus(c, "Background saving cancelled");
+            } else if (snapshotForklessInProgress()) {
+                serverLog(LL_NOTICE, "Background saving (forkless snapshot) will be aborted due to user request");
+                snapshotForklessCancel();
+                addReplyStatus(c, "Background saving cancelled");
             } else if (server.rdb_bgsave_scheduled != RDB_BGSAVE_TYPE_NONE) {
                 serverLog(LL_NOTICE, "Scheduled background saving will be cancelled due to user request");
                 server.rdb_bgsave_scheduled = RDB_BGSAVE_TYPE_NONE;
@@ -4575,6 +4585,12 @@ void bgsaveCommand(client *c) {
             addReplyError(c, "Another child process is active (AOF?): can't BGSAVE right now. "
                              "Use BGSAVE SCHEDULE in order to schedule a BGSAVE whenever "
                              "possible.");
+        }
+    } else if (server.snapshot_mode == SNAPSHOT_MODE_FORKLESS) {
+        if (snapshotForklessStart(server.rdb_filename) == C_OK) {
+            addReplyStatus(c, "Background saving started");
+        } else {
+            addReplyErrorObject(c, shared.err);
         }
     } else if (chosen_save_type == RDB_BGSAVE_TYPE_FORKLESS) {
         if (forklessSaveToDisk(server.rdb_filename) == C_OK) {

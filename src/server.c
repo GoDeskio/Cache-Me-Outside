@@ -60,6 +60,7 @@
 #include "util.h"
 #include "forkless.h"
 #include "crdt/peer.h"
+#include "rdb_forkless.h"
 
 #include "eval.h"
 #include "bgiteration.h"
@@ -1694,6 +1695,7 @@ long long serverCron(struct aeEventLoop *eventLoop, long long id, void *clientDa
     /* Handle background operations on databases. */
     databasesCron();
     crdtCron();
+    snapshotForklessCron();
 
     /* Start a scheduled AOF rewrite if this was requested by the user while
      * a BGSAVE was in progress. We don't start the rewrite if there is an
@@ -5249,6 +5251,10 @@ int finishShutdown(void) {
         serverLog(LL_WARNING, "There is a thread saving an .rdb. Cancelling it!");
         forklessSaveCancel();
     }
+    if (snapshotForklessInProgress()) {
+        serverLog(LL_WARNING, "There is a forkless snapshot in progress. Cancelling it!");
+        snapshotForklessCancel();
+    }
 
     /* Kill module child if there is one. */
     if (server.child_type == CHILD_TYPE_MODULE) {
@@ -6786,6 +6792,10 @@ sds genValkeyInfoString(dict *section_dict, int all_sections, int everything) {
                 "rdb_last_bgsave_time_sec:%jd\r\n", (intmax_t)server.rdb_save_time_last,
                 "rdb_current_bgsave_time_sec:%jd\r\n", (intmax_t)(isSaveInProgress() ? time(NULL) - server.rdb_save_time_start : -1),
                 "rdb_saves:%lld\r\n", server.stat_rdb_saves,
+                "forkless_snapshot_in_progress:%d\r\n", snapshotForklessInProgress(),
+                "forkless_snapshot_keys_remaining:%lld\r\n", snapshotForklessKeysRemaining(),
+                "forkless_snapshot_cow_keys:%lld\r\n", snapshotForklessCowKeys(),
+                "forkless_snapshot_slice_us_max:%lld\r\n", snapshotForklessSliceUsMax(),
                 "rdb_last_cow_size:%zu\r\n", server.stat_rdb_cow_bytes,
                 "rdb_last_load_keys_expired:%lld\r\n", server.rdb_last_load_keys_expired,
                 "rdb_last_load_keys_loaded:%lld\r\n", server.rdb_last_load_keys_loaded,
