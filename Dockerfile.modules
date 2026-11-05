@@ -29,3 +29,8 @@ FROM ${BASE}
 COPY --from=json /libjson.so /usr/local/lib/cmo-modules/libjson.so
 COPY --from=bloom /libbloom.so /usr/local/lib/cmo-modules/libbloom.so
 COPY --from=search /libsearch.so /usr/local/lib/cmo-modules/libsearch.so
+
+# From TS module PR
+# Loadable modules for the Cache Me Outside image.
+# The server image build runs this file's RUN lines from /src.
+RUN make -C /src/modules/timeseries && mkdir -p /opt/cmo/lib && cp /src/modules/timeseries/timeseries.so /opt/cmo/lib/timeseries.so
