@@ -15,7 +15,7 @@ on:
     - cron: '0 2 * * *'
 
 concurrency:
-  group: external-${{ github.head_ref || github.ref }}
+  group: external-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
@@ -77,7 +77,14 @@ jobs:
             --save "" --logfile external-server.log \
             --enable-protected-configs yes --enable-debug-command yes --enable-module-command yes
       - name: Create a single node cluster
-        run: ./src/valkey-cli cluster addslots $(for slot in {0..16383}; do echo $slot; done); sleep 5
+        run: |
+          # --daemonize returns before the child is listening.
+          for i in $(seq 1 50); do
+            ./src/valkey-cli ping && break
+            sleep 0.2
+          done
+          ./src/valkey-cli cluster addslots $(for slot in {0..16383}; do echo $slot; done)
+          sleep 5
       - name: Run external test
         run: |
           ./runtest \

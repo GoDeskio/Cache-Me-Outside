@@ -3714,6 +3714,20 @@ standardConfig static_configs[] = {
     createSpecialConfig("replicaof", "slaveof", IMMUTABLE_CONFIG | MULTI_ARG_CONFIG, setConfigReplicaOfOption, getConfigReplicaOfOption, rewriteConfigReplicaOfOption, NULL),
     createSpecialConfig("latency-tracking-info-percentiles", NULL, MODIFIABLE_CONFIG | MULTI_ARG_CONFIG, setConfigLatencyTrackingInfoPercentilesOutputOption, getConfigLatencyTrackingInfoPercentilesOutputOption, rewriteConfigLatencyTrackingInfoPercentilesOutputOption, NULL),
 
+    /* Warm restart. Off unless a checkpoint path is configured. */
+    createBoolConfig("cmo-warm-enabled", NULL, IMMUTABLE_CONFIG, server.cmo_warm_enabled, 0, NULL, NULL),
+    createStringConfig("cmo-warm-file", NULL, IMMUTABLE_CONFIG, EMPTY_STRING_IS_NULL, server.cmo_warm_file, NULL, NULL, NULL),
+
+    /* DRAM + flash hybrid cache. Off unless a flash file is configured. */
+    createBoolConfig("cmo-hybrid-enabled", NULL, IMMUTABLE_CONFIG, server.cmo_hybrid_enabled, 0, NULL, NULL),
+    createStringConfig("cmo-hybrid-file", NULL, IMMUTABLE_CONFIG, EMPTY_STRING_IS_NULL, server.cmo_hybrid_file, NULL, NULL, NULL),
+    createSizeTConfig("cmo-hybrid-min-value", NULL, IMMUTABLE_CONFIG, 64, LLONG_MAX, server.cmo_hybrid_min_value, 4096, MEMORY_CONFIG, NULL, NULL),
+    createSizeTConfig("cmo-hybrid-max-bytes", NULL, IMMUTABLE_CONFIG, 4096, LLONG_MAX, server.cmo_hybrid_max_bytes, (size_t)1024 * 1024 * 1024, MEMORY_CONFIG, NULL, NULL),
+
+    /* TTL segments. Off by default so expiry sampling is unchanged. */
+    createBoolConfig("cmo-ttl-segments", NULL, MODIFIABLE_CONFIG, server.cmo_ttl_segments, 0, NULL, NULL),
+    createLongLongConfig("cmo-ttl-segment-ms", NULL, IMMUTABLE_CONFIG, 1, 86400000LL, server.cmo_ttl_segment_ms, 1000, INTEGER_CONFIG, NULL, NULL),
+
     /* NULL Terminator, this is dropped when we convert to the runtime array. */
     {NULL},
 };
