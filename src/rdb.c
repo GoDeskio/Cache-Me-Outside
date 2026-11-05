@@ -586,6 +586,15 @@ ssize_t rdbSaveLongLongAsStringObject(rio *rdb, long long value) {
 ssize_t rdbSaveStringObject(rio *rdb, robj *obj) {
     /* Avoid to decode the object, then encode it again, if the
      * object is already integer encoded. */
+    if (server.cmo_hybrid_enabled && cmoHybridIsSpilled(obj)) {
+        sds real = cmoHybridMaterialize(obj);
+        ssize_t n;
+        if (real) {
+            n = rdbSaveRawString(rdb, (unsigned char *)real, sdslen(real));
+            sdsfree(real);
+            return n;
+        }
+    }
     if (obj->encoding == OBJ_ENCODING_INT) {
         return rdbSaveLongLongAsStringObject(rdb, (long)objectGetVal(obj));
     } else {
