@@ -1,0 +1,12 @@
+--- a/.github/workflows/cmo-ci.yml
++++ b/.github/workflows/cmo-ci.yml
+@@ -28,6 +28,9 @@
+       - name: Build server
+         run: make -j"$(nproc)" SERVER_CFLAGS='-Werror'
+ 
++      - name: Data browser tests
++        run: cd tools/mgmt && python3 test_cmo_browse.py
++
+       - name: Run a fast Valkey test subset
+         run: |
+           # introspection is omitted: its forkless-bgsave case is timing-sensitive

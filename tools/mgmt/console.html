@@ -15,6 +15,9 @@ table{width:100%;border-collapse:collapse;margin-top:1rem}td,th{border-bottom:1p
 <button>Create database</button></form>
 <div id="result" class="box" hidden role="status"></div>
 <p id="err" class="err" role="alert"></p>
+<section id="browser" hidden><h2 id="bname"></h2>
+<form id="bform"><label>Match <input id="bmatch" value="*"></label> <button>Search keys</button> <button type="button" id="bmore" hidden>More</button></form>
+<ul id="keys"></ul><div id="kv" class="box" hidden></div></section>
 <table><thead><tr><th>Name</th><th>Port</th><th>Ops/s</th><th>Conns</th><th></th></tr></thead><tbody id="rows"></tbody></table>
 <script>
 "use strict";
@@ -42,10 +45,34 @@ async function load(){
       const tr=tb.insertRow();for(const v of [d.name,d.port,d.ops_per_sec||"∞",d.max_conns||"∞"])tr.insertCell().textContent=v;
       const rot=document.createElement("button");rot.textContent="New password";
       rot.onclick=async()=>{if(confirm(`Replace the password for ${d.name}? The old one stops working.`)){try{show({...d,...await api("POST",`/v1/databases/${d.name}/rotate-password`,{})});}catch(e){$("err").textContent=e.message;}}};
-      tr.insertCell().append(rot);
+      const br=document.createElement("button");br.textContent="Browse";br.onclick=()=>browse(d.name,"0");
+      tr.insertCell().append(rot," ",br);
     }
   }catch(e){$("err").textContent=e.message;}
 }
+let cur={name:"",cursor:"0"};
+async function browse(name,cursor){
+  $("err").textContent="";$("browser").hidden=false;$("bname").textContent="Keys in "+name;
+  if(cursor==="0")$("keys").textContent="";cur={name,cursor};
+  try{
+    const r=await api("GET",`/v1/databases/${encodeURIComponent(name)}/keys?cursor=${encodeURIComponent(cursor)}&match=${encodeURIComponent($("bmatch").value)}`);
+    for(const k of r.keys){const li=document.createElement("li");const a=document.createElement("button");a.textContent=k;a.onclick=()=>openKey(name,k);li.append(a);$("keys").append(li);}
+    cur.cursor=r.cursor;$("bmore").hidden=r.cursor==="0";
+  }catch(e){$("err").textContent=e.message;}
+}
+async function openKey(name,key){
+  try{
+    const r=await api("GET",`/v1/databases/${encodeURIComponent(name)}/keys?key=${encodeURIComponent(key)}`);
+    const box=$("kv");box.hidden=false;box.textContent="";
+    const meta=document.createElement("p");meta.textContent=`${r.key} · ${r.type} · TTL ${r.ttl<0?"none":r.ttl+"s"}${r.size!==undefined?" · size "+r.size:""}${r.truncated?" · first 100 shown":""}`;
+    const pre=document.createElement("pre");const real=JSON.stringify(r.value,null,2);pre.textContent="•••••• hidden";
+    const eye=document.createElement("button");eye.textContent="👁 Show value";eye.setAttribute("aria-pressed","false");
+    eye.onclick=()=>{const on=eye.getAttribute("aria-pressed")!=="true";eye.setAttribute("aria-pressed",String(on));pre.textContent=on?real:"•••••• hidden";eye.textContent=on?"🙈 Hide value":"👁 Show value";};
+    box.append(meta,eye,pre);
+  }catch(e){$("err").textContent=e.message;}
+}
+$("bform").onsubmit=e=>{e.preventDefault();browse(cur.name,"0");};
+$("bmore").onclick=()=>browse(cur.name,cur.cursor);
 $("load").onclick=load;
 $("create").onsubmit=async e=>{e.preventDefault();$("err").textContent="";
   try{show(await api("POST","/v1/databases",{name:$("name").value}));$("name").value="";load();}catch(x){$("err").textContent=x.message;}};
