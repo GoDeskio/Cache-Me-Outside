@@ -13,14 +13,14 @@ Config (JSON):
   {"tenants": {"acme": {"listen": "0.0.0.0:7001", "upstream": "127.0.0.1:6379",
                         "max_conns": 50, "ops_per_sec": 1000,
                         "bytes_per_sec": 5000000}}}
-Any limit may be 0 or omitted to mean unlimited. Optional spending caps:
-  "budget": {"url": "https://billing.example/api"} or {"file": "caps.json"}
-(see cmo_budget.py). Standard library only.
+Any limit may be 0 or omitted to mean unlimited. Standard library only.
 
   python3 cmo_proxy.py config.json
+  python3 cmo_proxy.py --watch config.json   # reload when the file changes
 """
 import asyncio
 import json
+import os
 import sys
 import time
 
@@ -186,21 +186,59 @@ async def serve(tenants):
     return servers
 
 
+class Reloader:
+    """Keeps listeners in step with the config file.
+
+    New or changed tenants get a fresh listener; removed tenants stop
+    listening. Connections already open keep running with the limits they
+    started with until the client disconnects.
+    """
+    def __init__(self, path, budget=None):
+        self.path, self.budget = path, budget
+        self.cfgs, self.servers, self.mtime = {}, {}, object()
+
+    async def check(self):
+        try:
+            m = os.stat(self.path).st_mtime_ns
+        except FileNotFoundError:
+            m = None
+        if m == self.mtime:
+            return False
+        self.mtime = m
+        cfg = {}
+        if m is not None:
+            with open(self.path) as f:
+                cfg = json.load(f).get("tenants", {})
+        for name in list(self.servers):
+            if cfg.get(name) != self.cfgs.get(name):
+                self.servers.pop(name).close()
+                self.cfgs.pop(name, None)
+        for name, c in cfg.items():
+            if name not in self.servers:
+                t = Tenant(name, c, budget=self.budget)
+                self.servers[name] = await asyncio.start_server(
+                    lambda r, w, t=t: handle(t, r, w), *t.listen)
+                self.cfgs[name] = c
+        return True
+
+    async def run(self, interval=2.0):
+        while True:
+            try:
+                await self.check()
+            except (ValueError, OSError, KeyError) as e:
+                print("config reload failed, keeping current listeners: %s" % e, file=sys.stderr)
+            await asyncio.sleep(interval)
+
+
 def main(argv):
-    if len(argv) != 2:
+    args = [a for a in argv[1:] if a != "--watch"]
+    if len(args) != 1:
         print(__doc__)
         return 1
-    with open(argv[1]) as f:
-        cfg = json.load(f)
-    budget = None
-    b = cfg.get("budget")
-    if b:
-        import cmo_budget
-        src = (cmo_budget.HttpCapSource(b["url"]) if "url" in b
-               else cmo_budget.FileCapSource(b["file"]))
-        budget = cmo_budget.BudgetGuard(src, ttl=b.get("ttl", 30),
-                                        fail_open=b.get("fail_open", True))
-    tenants = load(argv[1], budget=budget)
+    if "--watch" in argv:
+        asyncio.run(Reloader(args[0]).run())
+        return 0
+    tenants = load(args[0])
 
     async def run():
         servers = await serve(tenants)

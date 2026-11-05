@@ -107,5 +107,28 @@ class ProxyTest(unittest.IsolatedAsyncioTestCase):
         w.close()
 
 
+class ReloadTest(unittest.IsolatedAsyncioTestCase):
+    async def test_add_change_remove(self):
+        import json, socket, tempfile
+        d = tempfile.mkdtemp(); path = os.path.join(d, "c.json")
+        r = p.Reloader(path)
+        self.assertTrue(await r.check())           # missing file: no listeners
+        self.assertEqual(r.servers, {})
+        s = socket.socket(); s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]; s.close()
+        cfg = {"tenants": {"a": {"listen": "127.0.0.1:%d" % port, "upstream": "127.0.0.1:1"}}}
+        json.dump(cfg, open(path, "w"))
+        await r.check()
+        self.assertIn("a", r.servers)
+        first = r.servers["a"]
+        self.assertFalse(await r.check())          # unchanged
+        cfg["tenants"]["a"]["ops_per_sec"] = 5
+        json.dump(cfg, open(path, "w")); os.utime(path, ns=(1, 1))
+        await r.check()
+        self.assertIsNot(r.servers["a"], first)     # changed: new listener
+        json.dump({"tenants": {}}, open(path, "w")); os.utime(path, ns=(2, 2))
+        await r.check()
+        self.assertEqual(r.servers, {})
+
+
 if __name__ == "__main__":
     unittest.main()

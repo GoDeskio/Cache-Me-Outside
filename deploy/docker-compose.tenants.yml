@@ -1,0 +1,82 @@
+# Optional: multi-tenant front door (proxy + management API/console).
+# Layer on top of docker-compose.yml:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.tenants.yml up -d --build
+#
+# - cmo-mgmt: API, CLI target and web console on ${CMO_BIND_ADDRESS}:${CMO_MGMT_PORT:-8088}.
+#   Needs CMO_ADMIN_TOKEN (24+ chars) in the env file. Put TLS in front before
+#   exposing it beyond localhost.
+# - cmo-proxy: one port per database, 7001-7020 by default, limits enforced,
+#   reloads tenants.json within ~2 s of a change.
+# Both share the tenants volume. Clients connect to the proxy port with the
+# database's own user and password, not to 6379.
+
+services:
+  cmo-proxy:
+    image: python:3.12-slim
+    container_name: ${CMO_NAME_PREFIX:-cache-me-outside}-proxy
+    command: ["python3", "/opt/cmo/proxy/cmo_proxy.py", "--watch", "/var/lib/cmo/tenants.json"]
+    volumes:
+      - ../tools/proxy:/opt/cmo/proxy:ro
+      - cmo-tenants:/var/lib/cmo:ro
+    ports:
+      - "${CMO_BIND_ADDRESS:-127.0.0.1}:${CMO_TENANT_PORTS:-7001-7020}:${CMO_TENANT_PORTS:-7001-7020}"
+    depends_on:
+      cache-me-outside:
+        condition: service_healthy
+      cmo-tenants-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    init: true
+    read_only: true
+    user: "65534:65534"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    mem_limit: ${CMO_PROXY_MEMORY:-128m}
+    networks:
+      cmo: {}
+
+  cmo-mgmt:
+    image: python:3.12-slim
+    container_name: ${CMO_NAME_PREFIX:-cache-me-outside}-mgmt
+    command: ["python3", "/opt/cmo/mgmt/cmo_mgmt.py",
+              "--config", "/var/lib/cmo/tenants.json",
+              "--server", "cache-me-outside:6379",
+              "--listen", "0.0.0.0:8088",
+              "--proxy-bind", "0.0.0.0"]
+    env_file:
+      - path: ${CMO_ENV_FILE:-.env}
+        required: false
+    volumes:
+      - ../tools/mgmt:/opt/cmo/mgmt:ro
+      - cmo-tenants:/var/lib/cmo
+    ports:
+      - "${CMO_BIND_ADDRESS:-127.0.0.1}:${CMO_MGMT_PORT:-8088}:8088"
+    depends_on:
+      cache-me-outside:
+        condition: service_healthy
+      cmo-tenants-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs: [/tmp]
+    user: "65534:65534"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    mem_limit: ${CMO_MGMT_MEMORY:-128m}
+    networks:
+      cmo: {}
+
+  cmo-tenants-init:
+    image: python:3.12-slim
+    command: ["sh", "-c", "chown 65534:65534 /var/lib/cmo"]
+    volumes:
+      - cmo-tenants:/var/lib/cmo
+    restart: "no"
+
+volumes:
+  cmo-tenants:
+    name: ${CMO_NAME_PREFIX:-cache-me-outside}-tenants
