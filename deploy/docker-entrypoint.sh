@@ -5,8 +5,46 @@
 # runtime directory is the data volume stores its auth lines on that volume.
 set -eu
 
+# Scoped API keys (docs/cache-me-outside/api-keys-design.md). Records live in
+# ${CMO_DATA_DIR}/cmo-keys as: key-<12hex> <expires|0> <ro|rw> <prefix|-> <sha256>
+# and are rendered into ACL lines from fixed templates only.
+cmo_render_keys() {
+    keys_file="${CMO_DATA_DIR:-/data}/cmo-keys"
+    [ -f "$keys_file" ] || return 0
+    now="$(date +%s)"
+    while read -r k_id k_exp k_scope k_prefix k_hash k_extra; do
+        [ -n "${k_id:-}" ] || continue
+        ok=1
+        case "$k_id" in key-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;; *) ok=0 ;; esac
+        [ "${#k_id}" -eq 16 ] || ok=0
+        case "$k_exp" in '' | *[!0-9]*) ok=0 ;; esac
+        case "$k_scope" in
+            ro) k_rules="-@all +@read +ping +auth +hello -@dangerous -@admin" ;;
+            rw) k_rules="-@all +@read +@write +ping +auth +hello -@dangerous -@admin" ;;
+            *) ok=0 ;;
+        esac
+        case "$k_prefix" in -) k_prefix="" ;; *[!A-Za-z0-9:_.-]*) ok=0 ;; esac
+        [ "${#k_prefix}" -le 64 ] || ok=0
+        case "$k_hash" in *[!0-9a-f]*) ok=0 ;; esac
+        [ "${#k_hash}" -eq 64 ] || ok=0
+        [ -z "${k_extra:-}" ] || ok=0
+        if [ "$ok" -ne 1 ]; then
+            echo "cache-me-outside: skipping malformed key record ${k_id:-?}" >&2
+            continue
+        fi
+        if [ "$k_exp" -ne 0 ] && [ "$k_exp" -le "$now" ]; then
+            continue
+        fi
+        printf '%s\n' "user ${k_id} on #${k_hash} resetchannels resetkeys ~${k_prefix}* ${k_rules}"
+    done < "$keys_file"
+}
+
 # Client tools skip ACL generation. `docker run --entrypoint valkey-cli` stays a client.
 case "${1:-}" in
+    --render-keys)
+        cmo_render_keys
+        exit 0
+        ;;
     valkey-cli | valkey-benchmark | valkey-check-rdb | valkey-check-aof | redis-cli)
         if [ "$(id -u)" = "0" ]; then
             exec gosu valkey "$@"
@@ -292,6 +330,10 @@ acl_file="${CMO_RUNTIME_DIR}/cmo-users.acl"
         # same user (AUTH2) and runs RESTORE / RESTORE-ASKING. Adding a primary
         # also copies functions (FUNCTION DUMP, LIST, and RESTORE).
         printf '%s\n' "user ${cluster_user} on >${cluster_pass} ~* &* +select +restore +restore-asking +migrate +cluster +asking +readonly +readwrite +ping +info +function|dump +function|list +function|restore +config|get"
+    fi
+    if [ "$CMO_ROLE" != "sentinel" ]; then
+        # Sentinels do not register data commands; key rules would abort start-up.
+        cmo_render_keys
     fi
 } > "$acl_file"
 chmod 600 "$acl_file"
