@@ -1363,6 +1363,13 @@ start_server {tags {"introspection"}} {
             rdma-bind
             rdma-port
             forkless-infrastructure-enabled
+            cmo-warm-enabled
+            cmo-warm-file
+            cmo-hybrid-enabled
+            cmo-hybrid-file
+            cmo-hybrid-min-value
+            cmo-hybrid-max-bytes
+            cmo-ttl-segment-ms
         }
 
         if {!$::tls} {

@@ -191,8 +191,15 @@ proc get_nodes_conf_path {srv_idx} {
 # failure and it will cause cluster config file save to fail at the rename.
 proc create_nodes_conf_folder {srv_idx} {
     set cluster_conf_path [get_nodes_conf_path $srv_idx]
-    if {[file exists $cluster_conf_path]} { exec rm -rf $cluster_conf_path }
-    exec mkdir -p $cluster_conf_path
+    # The node can rewrite nodes.conf between the delete and the mkdir.
+    # mkdir -p then fails with "File exists" and aborts the coverage run.
+    for {set attempt 0} {$attempt < 5} {incr attempt} {
+        if {[file exists $cluster_conf_path]} { exec rm -rf $cluster_conf_path }
+        if {![catch {exec mkdir -p $cluster_conf_path}]} {
+            return
+        }
+    }
+    error "could not replace nodes.conf with a directory at $cluster_conf_path"
 }
 
 # Remove the folder (or nodes.conf) that we created from create_nodes_conf_folder.

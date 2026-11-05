@@ -1,0 +1,153 @@
+{
+  "uid": "cmo-tenant",
+  "title": "Cache Me Outside: tenant",
+  "schemaVersion": 39,
+  "tags": [
+    "cache-me-outside"
+  ],
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Tenant ops",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cmo-prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cmo-prom"
+          },
+          "expr": "cmo_ops_rate{db=\"$db\"}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Tenant hit ratio",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cmo-prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cmo-prom"
+          },
+          "expr": "rate(cmo_keyspace_hits_total{db=\"$db\"}[5m]) / clamp_min(rate(cmo_keyspace_hits_total{db=\"$db\"}[5m]) + rate(cmo_keyspace_misses_total{db=\"$db\"}[5m]), 1)"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Tenant memory",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cmo-prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cmo-prom"
+          },
+          "expr": "cmo_memory_used{db=\"$db\"}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Tenant evictions",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "cmo-prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "cmo-prom"
+          },
+          "expr": "rate(cmo_keys_evicted_total{db=\"$db\"}[5m])"
+        }
+      ]
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "db",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "cmo-prom"
+        },
+        "query": "label_values(cmo_ops_rate, db)",
+        "refresh": 2
+      }
+    ]
+  }
+}

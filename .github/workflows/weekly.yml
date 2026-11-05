@@ -9,7 +9,7 @@ permissions:
   pull-requests: read
 concurrency:
   group: weekly-release-tests
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   determine-release-branches:
     if: github.repository == 'valkey-io/valkey'

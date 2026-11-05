@@ -5,7 +5,7 @@ on:
   pull_request:
 
 concurrency:
-  group: cmo-ci-${{ github.ref }}
+  group: cmo-ci-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
@@ -27,6 +27,14 @@ jobs:
 
       - name: Build server
         run: make -j"$(nproc)" SERVER_CFLAGS='-Werror'
+
+      - name: Terraform provider tests
+        run: |
+          ./src/valkey-server --port 6390 --daemonize yes --save '' --appendonly no
+          cd terraform/provider
+          test -z "$(gofmt -l .)"
+          go vet ./...
+          CMO_TEST_ADDR=127.0.0.1:6390 go test ./...
 
       - name: Run a fast Valkey test subset
         run: |
