@@ -1,0 +1,12 @@
+--- a/.github/workflows/cmo-ci.yml
++++ b/.github/workflows/cmo-ci.yml
+@@ -28,6 +28,9 @@
+       - name: Build server
+         run: make -j"$(nproc)" SERVER_CFLAGS='-Werror'
+ 
++      - name: Proxy reload + management tests
++        run: python3 tools/proxy/test_cmo_proxy.py && cd tools/mgmt && python3 test_cmo_mgmt.py && python3 test_cmo_browse.py
++
+       - name: Run a fast Valkey test subset
+         run: |
+           # introspection is omitted: its forkless-bgsave case is timing-sensitive
