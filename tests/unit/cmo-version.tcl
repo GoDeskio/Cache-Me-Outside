@@ -7,5 +7,6 @@ start_server {tags {"cmo" "external:skip"}} {
         assert_match {[0-9]*.[0-9]*.[0-9]*} $version
         assert_no_match {*-*} $version
         assert_equal $marker ${version}-cmo
+        assert_equal no [s cmo_fips_build]
     }
 }

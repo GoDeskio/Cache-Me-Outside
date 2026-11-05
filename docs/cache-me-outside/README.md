@@ -19,7 +19,10 @@ Valkey and the Redis code it inherited stay under the BSD 3-Clause License. See 
 - [Benchmarking](benchmarking.md)
 - [Upstream sync](upstream-sync.md)
 - [Roadmap](roadmap.md)
+- [Warm restart](warm-restart.md)
+- [DRAM + flash hybrid storage](hybrid-storage.md)
+- [TTL-grouped storage](ttl-segments.md)
 
 ## What this fork changes
 
-The fork is additive. New files live under `deploy/`, `packaging/`, `docs/cache-me-outside/`, and `.github/workflows/cmo-ci.yml`. The server change is the `cmo_version` field in `src/server.c` and `src/cmo_version.h`. Binaries stay `valkey-server`, `valkey-cli`, and `valkey-benchmark`. `make install` still creates the `redis-*` symlinks. Standalone, Sentinel, and cluster layouts are selected with `deploy/up.sh` and do not rename those binaries. A `.deb` and a Helm chart install the same binaries on a VM or a Kubernetes cluster.
+The fork is additive. New files live under `deploy/`, `packaging/`, `docs/cache-me-outside/`, and `.github/workflows/cmo-ci.yml`. The server reports `cmo_version`. When `cmo-warm-enabled` is on, a clean shutdown writes a checkpoint that the next process loads if RDB and AOF did not. When `cmo-hybrid-enabled` is on, large strings spill to a flash log. When `cmo-ttl-segments` is on, keys that expire in the same time bucket are deleted together. All three are off unless configured. Binaries stay `valkey-server`, `valkey-cli`, and `valkey-benchmark`. `make install` still creates the `redis-*` symlinks. Standalone, Sentinel, and cluster layouts are selected with `deploy/up.sh` and do not rename those binaries. A `.deb` and a Helm chart install the same binaries on a VM or a Kubernetes cluster.
