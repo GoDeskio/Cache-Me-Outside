@@ -1,0 +1,10 @@
+{
+  "name": "@cachemeoutside/client",
+  "version": "0.1.0",
+  "description": "Thin Node client for Cache Me Outside (wraps valkey-glide)",
+  "main": "index.js",
+  "license": "SEE LICENSE IN ../../LICENSE",
+  "scripts": { "test": "node --test test/*.test.js" },
+  "peerDependencies": { "@valkey/valkey-glide": ">=2 <3" },
+  "engines": { "node": ">=18" }
+}
