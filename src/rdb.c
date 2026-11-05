@@ -51,6 +51,7 @@
 #include "compression_stream.h"
 #include "forkless.h"
 #include "rdb_forkless.h"
+#include "tier/tier.h"
 
 #include <math.h>
 #include <fcntl.h>
@@ -595,6 +596,14 @@ ssize_t rdbSaveStringObject(rio *rdb, robj *obj) {
             sdsfree(real);
             return n;
         }
+    }
+    if (obj->encoding == OBJ_ENCODING_TIERED) {
+        sds raw = tierReadRef(objectGetVal(obj));
+        ssize_t n;
+        if (!raw) return -1;
+        n = rdbSaveRawString(rdb, (unsigned char *)raw, sdslen(raw));
+        sdsfree(raw);
+        return n;
     }
     if (obj->encoding == OBJ_ENCODING_INT) {
         return rdbSaveLongLongAsStringObject(rdb, (long)objectGetVal(obj));

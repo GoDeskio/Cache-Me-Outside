@@ -843,6 +843,7 @@ typedef struct ValkeyModuleType moduleType;
 #define OBJ_ENCODING_LISTPACK 11  /* Encoded as a listpack */
 #define OBJ_ENCODING_LISTPACK2 12 /* Encoded as a listpack with metadata tag */
 #define OBJ_ENCODING_PATH_HASH 13 /* Path hash backed by a radix tree */
+#define OBJ_ENCODING_TIERED 14    /* String payload lives in the tiering value log */
 
 #define OBJ_REFCOUNT_BITS 29
 #define OBJ_SHARED_REFCOUNT ((1 << OBJ_REFCOUNT_BITS) - 1) /* Global object never destroyed. */
@@ -2223,6 +2224,13 @@ struct valkeyServer {
     long long crdt_tombstone_gc_ms;
     int snapshot_mode;                    /* SNAPSHOT_MODE_FORK or SNAPSHOT_MODE_FORKLESS */
     int snapshot_forkless_slice_keys;     /* Max keys written per cron tick in forkless mode */
+    int tiering_enabled;
+    char *tiering_path;
+    int tiering_min_value;
+    long long tiering_max_ram;
+    int tiering_idle_seconds;
+    int tiering_debug_crash_after;
+    int tiering_debug_exit_before_rename;
     int key_load_delay;                   /* Delay in microseconds between keys while
                                            * loading aof or rdb. (for testings). negative
                                            * value means fractions of microseconds (on average). */

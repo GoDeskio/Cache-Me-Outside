@@ -61,6 +61,7 @@
 #include "forkless.h"
 #include "crdt/peer.h"
 #include "rdb_forkless.h"
+#include "tier/tier.h"
 
 #include "eval.h"
 #include "bgiteration.h"
@@ -1696,6 +1697,7 @@ long long serverCron(struct aeEventLoop *eventLoop, long long id, void *clientDa
     databasesCron();
     crdtCron();
     snapshotForklessCron();
+    tierCron();
 
     /* Start a scheduled AOF rewrite if this was requested by the user while
      * a BGSAVE was in progress. We don't start the rewrite if there is an
@@ -6741,6 +6743,11 @@ sds genValkeyInfoString(dict *section_dict, int all_sections, int everything) {
                 "mem_overhead_db_hashtable_rehashing:%zu\r\n", mh->overhead_db_hashtable_rehashing,
                 "active_defrag_running:%d\r\n", server.active_defrag_cpu_percent,
                 "lazyfree_pending_objects:%zu\r\n", lazyfreeGetPendingObjectsCount(),
+                "tiering_enabled:%d\r\n", server.tiering_enabled,
+                "tiering_spills:%lld\r\n", tierSpills(),
+                "tiering_promotions:%lld\r\n", tierPromotions(),
+                "tiering_bytes:%lld\r\n", tierBytesOnDisk(),
+                "tiering_dead_bytes:%lld\r\n", tierDeadBytes(),
                 "lazyfreed_objects:%zu\r\n", lazyfreeGetFreedObjectsCount()));
         freeMemoryOverheadData(mh);
     }

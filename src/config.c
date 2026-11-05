@@ -3483,6 +3483,8 @@ standardConfig static_configs[] = {
     createBoolConfig("syslog-enabled", NULL, IMMUTABLE_CONFIG, server.syslog_enabled, 0, NULL, NULL),
     createBoolConfig("cluster-enabled", NULL, IMMUTABLE_CONFIG, server.cluster_enabled, 0, NULL, NULL),
     createBoolConfig("crdt-enabled", NULL, MODIFIABLE_CONFIG, server.crdt_enabled, 0, NULL, NULL),
+    createBoolConfig("tiering-enabled", NULL, MODIFIABLE_CONFIG, server.tiering_enabled, 0, NULL, NULL),
+    createBoolConfig("tiering-debug-exit-before-rename", NULL, MODIFIABLE_CONFIG, server.tiering_debug_exit_before_rename, 0, NULL, NULL),
     createBoolConfig("appendonly", NULL, MODIFIABLE_CONFIG | DENY_LOADING_CONFIG, server.aof_enabled, 0, NULL, updateAppendOnly),
     createBoolConfig("cluster-allow-reads-when-down", NULL, MODIFIABLE_CONFIG, server.cluster_allow_reads_when_down, 0, NULL, NULL),
     createBoolConfig("cluster-allow-pubsubshard-when-down", NULL, MODIFIABLE_CONFIG, server.cluster_allow_pubsubshard_when_down, 1, NULL, NULL),
@@ -3506,6 +3508,7 @@ standardConfig static_configs[] = {
     /* String Configs */
     createStringConfig("aclfile", NULL, IMMUTABLE_CONFIG, ALLOW_EMPTY_STRING, server.acl_filename, "", NULL, NULL),
     createStringConfig("crdt-peers", NULL, MODIFIABLE_CONFIG, ALLOW_EMPTY_STRING, server.crdt_peers, "", NULL, NULL),
+    createStringConfig("tiering-path", NULL, MODIFIABLE_CONFIG, EMPTY_STRING_IS_NULL, server.tiering_path, "tier.vlog", NULL, NULL),
     createStringConfig("unixsocket", NULL, IMMUTABLE_CONFIG, EMPTY_STRING_IS_NULL, server.unixsocket, NULL, NULL, NULL),
     createStringConfig("unixsocketgroup", NULL, IMMUTABLE_CONFIG, EMPTY_STRING_IS_NULL, server.unix_ctx_config.group, NULL, NULL, NULL),
     createStringConfig("pidfile", NULL, IMMUTABLE_CONFIG, EMPTY_STRING_IS_NULL, server.pidfile, NULL, NULL, NULL),
@@ -3571,6 +3574,10 @@ standardConfig static_configs[] = {
     createIntConfig("databases", NULL, IMMUTABLE_CONFIG, 1, INT_MAX, server.config_databases, 16, INTEGER_CONFIG, NULL, NULL),
     createIntConfig("crdt-region-id", NULL, MODIFIABLE_CONFIG, 1, 65535, server.crdt_region_id, 1, INTEGER_CONFIG, NULL, NULL),
     createLongLongConfig("crdt-tombstone-gc-ms", NULL, MODIFIABLE_CONFIG, 0, LLONG_MAX, server.crdt_tombstone_gc_ms, 60000, INTEGER_CONFIG, NULL, NULL),
+    createIntConfig("tiering-min-value", NULL, MODIFIABLE_CONFIG, 1, INT_MAX, server.tiering_min_value, 128, INTEGER_CONFIG, NULL, NULL),
+    createIntConfig("tiering-idle-seconds", NULL, MODIFIABLE_CONFIG, 0, INT_MAX, server.tiering_idle_seconds, 60, INTEGER_CONFIG, NULL, NULL),
+    createIntConfig("tiering-debug-crash-after", NULL, MODIFIABLE_CONFIG, 0, INT_MAX, server.tiering_debug_crash_after, 0, INTEGER_CONFIG, NULL, NULL),
+    createLongLongConfig("tiering-max-ram", NULL, MODIFIABLE_CONFIG, 0, LLONG_MAX, server.tiering_max_ram, 0, MEMORY_CONFIG, NULL, NULL),
     createIntConfig("cluster-databases", NULL, IMMUTABLE_CONFIG, 1, INT_MAX, server.config_databases_cluster, 1, INTEGER_CONFIG, NULL, NULL),
     createIntConfig("port", NULL, MODIFIABLE_CONFIG, 0, 65535, server.port, 6379, INTEGER_CONFIG, NULL, updatePort),                                               /* TCP port. */
     createIntConfig("io-threads", NULL, DEBUG_CONFIG | MODIFIABLE_CONFIG, 1, IO_THREADS_MAX_NUM, server.io_threads_num, 1, INTEGER_CONFIG, NULL, updateIOThreads), /* Single threaded by default */

@@ -605,6 +605,9 @@ ENGINE_SERVER_OBJ = \
     crdt/merge.o \
     crdt/peer.o \
     rdb_forkless.o \
+    tier/vlog.o \
+    tier/evict.o \
+    tier/compact.o \
     rdma.o \
     release.o \
     replication.o \

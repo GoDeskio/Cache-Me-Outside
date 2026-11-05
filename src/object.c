@@ -30,6 +30,7 @@
 
 #include "hashtable.h"
 #include "server.h"
+#include "tier/tier.h"
 #include "ordered_index.h"
 #include "serverassert.h"
 #include "functions.h"
@@ -619,6 +620,14 @@ robj *dupStringObject(const robj *o) {
         d->encoding = OBJ_ENCODING_INT;
         d->val_ptr = o->val_ptr;
         return d;
+    case OBJ_ENCODING_TIERED: {
+        sds raw = tierReadRef(objectGetVal(o));
+        robj *copy;
+        if (!raw) serverPanic("Tiered string unreadable");
+        copy = createRawStringObject(raw, sdslen(raw));
+        sdsfree(raw);
+        return copy;
+    }
     default: serverPanic("Wrong encoding."); break;
     }
 }
@@ -700,6 +709,9 @@ robj *createModuleObject(moduleType *mt, void *value) {
 void freeStringObject(robj *o) {
     if (objectGetEncoding(o) == OBJ_ENCODING_RAW) {
         sdsfree(objectGetVal(o));
+    } else if (objectGetEncoding(o) == OBJ_ENCODING_TIERED) {
+        tierMarkDead(objectGetVal(o));
+        zfree(objectGetVal(o));
     }
 }
 
@@ -1072,6 +1084,13 @@ robj *getDecodedObject(robj *o) {
     if (sdsEncodedObject(o)) {
         incrRefCount(o);
         return o;
+    }
+    if (objectGetType(o) == OBJ_STRING && objectGetEncoding(o) == OBJ_ENCODING_TIERED) {
+        sds raw = tierReadRef(objectGetVal(o));
+        if (!raw) serverPanic("Tiered string unreadable");
+        dec = createStringObject(raw, sdslen(raw));
+        sdsfree(raw);
+        return dec;
     }
     if (objectGetType(o) == OBJ_STRING && objectGetEncoding(o) == OBJ_ENCODING_INT) {
         char buf[32];

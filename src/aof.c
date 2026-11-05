@@ -32,6 +32,7 @@
 #include "listpack.h"
 #include "sds.h"
 #include "server.h"
+#include "tier/tier.h"
 #include "ordered_index.h"
 #include "bio.h"
 #include "rio.h"
@@ -1925,6 +1926,13 @@ int rioWriteBulkObject(rio *r, robj *obj) {
     }
     if (obj->encoding == OBJ_ENCODING_INT) {
         return rioWriteBulkLongLong(r, (long)objectGetVal(obj));
+    } else if (obj->encoding == OBJ_ENCODING_TIERED) {
+        sds raw = tierReadRef(objectGetVal(obj));
+        int n;
+        if (!raw) return 0;
+        n = rioWriteBulkString(r, raw, sdslen(raw));
+        sdsfree(raw);
+        return n;
     } else if (sdsEncodedObject(obj)) {
         return rioWriteBulkString(r, objectGetVal(obj), sdslen(objectGetVal(obj)));
     } else {
