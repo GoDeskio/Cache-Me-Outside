@@ -1,0 +1,12 @@
+--- a/.github/workflows/cmo-ci.yml
++++ b/.github/workflows/cmo-ci.yml
+@@ -28,6 +28,9 @@
+       - name: Build server
+         run: make -j"$(nproc)" SERVER_CFLAGS='-Werror'
+ 
++      - name: Key-event webhook offline test
++        run: python3 tools/keyevents/test_cmo_keyevents.py
++
+       - name: Run a fast Valkey test subset
+         run: |
+           # introspection is omitted: its forkless-bgsave case is timing-sensitive
