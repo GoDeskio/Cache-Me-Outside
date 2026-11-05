@@ -1363,6 +1363,8 @@ long long clientsTimeProc(struct aeEventLoop *eventLoop, long long id, void *cli
  * incrementally in the databases, such as active key expiring, resizing,
  * rehashing. */
 void databasesCron(void) {
+    if (server.cmo_hybrid_enabled) cmoHybridDrainPending();
+    if (server.cmo_ttl_segments) cmoTtlSegCron();
     /* Expire keys by random sampling. Not required for replicas
      * as primary will synthesize DELs for us. */
     if (server.active_expire_enabled) {
@@ -5311,6 +5313,10 @@ int finishShutdown(void) {
     /* Fire the shutdown modules event. */
     moduleFireServerEvent(VALKEYMODULE_EVENT_SHUTDOWN, 0, NULL);
 
+    /* Snapshot while the flash log is still open, then close it. */
+    cmoWarmSave();
+    cmoHybridClose();
+
     /* Remove the pid file if possible and needed. */
     if (server.daemonize || server.pidfile) {
         serverLog(LL_NOTICE, "Removing the pid file.");
@@ -6531,6 +6537,11 @@ sds genValkeyInfoString(dict *section_dict, int all_sections, int everything) {
                 "availability_zone:%s\r\n", server.availability_zone));
 
         info = sdscatfmt(info, "cmo_version:%s\r\n", CMO_VERSION);
+#ifdef CMO_BUILD_FIPS
+        info = sdscat(info, "cmo_fips_build:yes\r\n");
+#else
+        info = sdscat(info, "cmo_fips_build:no\r\n");
+#endif
 
         /* Conditional properties */
         if (isShutdownInitiated()) {
@@ -7178,6 +7189,18 @@ sds genValkeyInfoString(dict *section_dict, int all_sections, int everything) {
         }
     }
 
+    if (all_sections || (dictFind(section_dict, "cmo_hybrid") != NULL)) {
+        if (sections++) info = sdscat(info, "\r\n");
+        info = sdscatprintf(info, "# Cmo_hybrid\r\n");
+        info = cmoHybridCatInfo(info);
+    }
+
+    if (all_sections || (dictFind(section_dict, "cmo_ttl") != NULL)) {
+        if (sections++) info = sdscat(info, "\r\n");
+        info = sdscatprintf(info, "# Cmo_ttl\r\n");
+        info = cmoTtlSegCatInfo(info);
+    }
+
     /* Hotkeys */
     if (all_sections || (dictFind(section_dict, "hotkeys") != NULL)) {
         if (sections++) info = sdscat(info, "\r\n");
@@ -7679,11 +7702,14 @@ int checkForSentinelMode(int argc, char **argv, char *exec_name) {
 /* Function called at startup to load RDB or AOF file in memory. */
 void loadDataFromDisk(void) {
     ustime_t start = ustime();
+    int loaded = 0;
     if (server.aof_state == AOF_ON) {
         int ret = loadAppendOnlyFiles(server.aof_manifest);
         if (ret == AOF_FAILED || ret == AOF_OPEN_ERR) exit(1);
-        if (ret != AOF_NOT_EXIST)
+        if (ret != AOF_NOT_EXIST) {
+            loaded = 1;
             serverLog(LL_NOTICE, "DB loaded from append only file: %.3f seconds", (float)(ustime() - start) / 1000000);
+        }
     } else {
         rdbSaveInfo rsi = RDB_SAVE_INFO_INIT;
         int rsi_is_valid = 0;
@@ -7697,6 +7723,7 @@ void loadDataFromDisk(void) {
         }
         int rdb_load_ret = rdbLoad(server.rdb_filename, &rsi, rdb_flags);
         if (rdb_load_ret == RDB_OK) {
+            loaded = 1;
             serverLog(LL_NOTICE, "DB loaded from disk: %.3f seconds", (float)(ustime() - start) / 1000000);
 
             /* Restore the replication ID / offset from the RDB file. */
@@ -7740,6 +7767,8 @@ void loadDataFromDisk(void) {
          * of replication backlog, we drop it. */
         if (!rsi_is_valid && server.repl_backlog) freeReplicationBacklog();
     }
+    /* Durability files win. The checkpoint is only the source when they are absent. */
+    if (!loaded) cmoWarmTryLoad();
 }
 
 void serverOutOfMemoryHandler(size_t allocation_size) {
@@ -8196,6 +8225,7 @@ __attribute__((weak)) int main(int argc, char **argv) {
         /* Things not needed when running in Sentinel mode. */
         serverLog(LL_NOTICE, "Server initialized");
         aofLoadManifestFromDisk();
+        cmoHybridOpen();
         loadDataFromDisk();
         aofOpenIfNeededOnServerStart();
         aofDelHistoryFiles();

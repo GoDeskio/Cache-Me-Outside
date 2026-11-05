@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>CMO data flow</title>
+<style>
+body{background:#0b1020;color:#cfe3ff;font:14px system-ui;margin:0}
+h1{font-size:16px;padding:12px 16px;margin:0}
+svg{width:100%;height:auto;display:block}
+.node rect{fill:#16213e;stroke:#4cc9f0;stroke-width:2;rx:10}
+.node text{fill:#e0f0ff;text-anchor:middle;font-size:14px}
+.path{fill:none;stroke:#23395d;stroke-width:3}
+.dot{r:4}.req{fill:#4cc9f0}.near{fill:#80ffdb}.hit{fill:#72efdd}.miss{fill:#f72585}.db{fill:#ffbe0b}
+#stats{padding:8px 16px;font-variant-numeric:tabular-nums}
+</style></head><body>
+<h1>Cache Me Outside: live data flow</h1>
+<div id="stats">waiting for /v1/flow…</div>
+<svg id="g" viewBox="0 0 900 320" role="img" aria-label="request to near cache to cache hit or miss to database">
+<path id="p-req" class="path" d="M110 160 H260"/>
+<path id="p-near" class="path" d="M360 160 C420 60 520 60 560 80"/>
+<path id="p-hit" class="path" d="M360 160 H560"/>
+<path id="p-miss" class="path" d="M360 160 C420 260 520 260 560 240"/>
+<path id="p-db" class="path" d="M660 240 H790"/>
+<g class="node"><rect x="10" y="135" width="100" height="50"/><text x="60" y="165">request</text></g>
+<g class="node"><rect x="260" y="135" width="100" height="50"/><text x="310" y="165">near cache</text></g>
+<g class="node"><rect x="560" y="55" width="100" height="50"/><text x="610" y="85">near hit</text></g>
+<g class="node"><rect x="560" y="135" width="100" height="50"/><text x="610" y="165">cache hit</text></g>
+<g class="node"><rect x="560" y="215" width="100" height="50"/><text x="610" y="245">miss</text></g>
+<g class="node"><rect x="790" y="215" width="100" height="50"/><text x="840" y="245">DB query</text></g>
+<g id="dots"></g>
+</svg>
+<script src="/flow.js"></script>
+</body></html>

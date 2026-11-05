@@ -4321,6 +4321,8 @@ void commandProcessed(client *c) {
     reqresAppendResponse(c);
     clusterSlotStatsAddNetworkBytesInForUserClient(c);
     resetClient(c);
+    /* Argv no longer holds the value, so a large string can move to flash. */
+    if (server.cmo_hybrid_enabled) cmoHybridDrainPending();
 
     if (!c->repl_data) return;
 
