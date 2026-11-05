@@ -28,6 +28,7 @@
  */
 
 #include "server.h"
+#include "crdt/peer.h"
 #include "listpack.h"
 #include "hotkeys.h"
 #include "ordered_index.h"
@@ -922,6 +923,7 @@ void delGenericCommand(client *c, int lazy) {
         if (expireIfNeeded(c->db, c->argv[j], NULL, 0) == KEY_DELETED) continue;
         int deleted = lazy ? dbAsyncDelete(c->db, c->argv[j]) : dbSyncDelete(c->db, c->argv[j]);
         if (deleted) {
+            crdtObserveDelete(c->db, c->argv[j]);
             signalModifiedKey(c, c->db, c->argv[j]);
             notifyKeyspaceEvent(NOTIFY_GENERIC, "del", c->argv[j], c->db->id);
             server.dirty++;

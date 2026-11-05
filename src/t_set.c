@@ -33,6 +33,7 @@
  */
 
 #include "server.h"
+#include "crdt/peer.h"
 #include "hashtable.h"
 #include "intset.h" /* Compact integer set structure */
 
@@ -609,7 +610,10 @@ void saddCommand(client *c) {
     }
 
     for (j = 2; j < c->argc; j++) {
-        if (setTypeAdd(set, objectGetVal(c->argv[j]))) added++;
+        if (setTypeAdd(set, objectGetVal(c->argv[j]))) {
+            added++;
+            crdtObserveSetAdd(c->db, c->argv[1], objectGetVal(c->argv[j]));
+        }
     }
     if (added) {
         signalModifiedKey(c, c->db, c->argv[1]);
@@ -628,6 +632,7 @@ void sremCommand(client *c) {
     if (set->encoding == OBJ_ENCODING_HASHTABLE) hashtablePauseAutoShrink(objectGetVal(set));
     for (j = 2; j < c->argc; j++) {
         if (setTypeRemove(set, objectGetVal(c->argv[j]))) {
+            crdtObserveSetRemove(c->db, c->argv[1], objectGetVal(c->argv[j]));
             deleted++;
             if (setTypeSize(set) == 0) {
                 dbDelete(c->db, c->argv[1]);

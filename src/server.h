@@ -2212,6 +2212,10 @@ struct valkeyServer {
                                            * writing aof or rdb. (for testings). negative
                                            * value means fractions of microseconds (on average). */
     int bgsave_default_method;            /* Default bgsave method: RDB_BGSAVE_TYPE_FORK or RDB_BGSAVE_TYPE_FORKLESS */
+    int crdt_enabled;
+    int crdt_region_id;
+    char *crdt_peers;
+    long long crdt_tombstone_gc_ms;
     int key_load_delay;                   /* Delay in microseconds between keys while
                                            * loading aof or rdb. (for testings). negative
                                            * value means fractions of microseconds (on average). */
