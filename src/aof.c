@@ -1914,6 +1914,15 @@ cleanup:
 int rioWriteBulkObject(rio *r, robj *obj) {
     /* Avoid using getDecodedObject to help copy-on-write (we are often
      * in a child process when this function is called). */
+    if (server.cmo_hybrid_enabled && cmoHybridIsSpilled(obj)) {
+        sds real = cmoHybridMaterialize(obj);
+        int n;
+        if (real) {
+            n = rioWriteBulkString(r, real, sdslen(real));
+            sdsfree(real);
+            return n;
+        }
+    }
     if (obj->encoding == OBJ_ENCODING_INT) {
         return rioWriteBulkLongLong(r, (long)objectGetVal(obj));
     } else if (sdsEncodedObject(obj)) {
