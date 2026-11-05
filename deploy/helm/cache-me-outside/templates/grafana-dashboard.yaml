@@ -1,0 +1,16 @@
+{{- if .Values.metrics.grafanaDashboard.enabled }}
+{{- if not .Values.metrics.exporter.enabled }}
+{{- fail "metrics.grafanaDashboard.enabled requires metrics.exporter.enabled" }}
+{{- end }}
+# Picked up by the Grafana sidecar (label below), or import the JSON by hand.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cmo.fullname" . }}-dashboard
+  labels:
+    {{- include "cmo.labels" . | nindent 4 }}
+    {{ .Values.metrics.grafanaDashboard.label }}: {{ .Values.metrics.grafanaDashboard.labelValue | quote }}
+data:
+  cmo-overview.json: |-
+{{ .Files.Get "dashboards/cmo-overview.json" | indent 4 }}
+{{- end }}
