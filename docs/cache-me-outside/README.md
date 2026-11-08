@@ -22,6 +22,8 @@ Valkey and the Redis code it inherited stay under the BSD 3-Clause License. See 
 - [Warm restart](warm-restart.md)
 - [DRAM + flash hybrid storage](hybrid-storage.md)
 - [TTL-grouped storage](ttl-segments.md)
+- [Management API and site](management-api.md)
+- [Adopting the cache from another GoDesk app](../../INTEGRATION.md)
 
 ## What this fork changes
 

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flow · Cache Me Outside</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header>
+<div class="wrap nav">
+<a class="brand" href="/"><svg class="mark" viewBox="0 0 32 32" width="34" height="34" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#17211d"/><path d="M7 21c2.2-7 5.2-10 9-10s6.8 3 9 10" fill="none" stroke="#e7b56a" stroke-width="2"/><circle cx="16" cy="11" r="2.2" fill="#9be7c4"/></svg>Cache Me Outside</a>
+<button id="menu" type="button" aria-expanded="false" aria-controls="nav">Menu</button>
+<nav id="nav" class="links" aria-label="Main"><a href="/">Home</a><a href="/console">Console</a><a href="/flow" aria-current="page">Flow</a><a href="/integrate">Integrate</a></nav>
+</div>
+</header>
+<main id="main">
+<section class="page-head">
+<div class="wrap">
+<p class="eyebrow">Live data flow</p>
+<h1>From the request to the database</h1>
+<p id="flow-note" class="banner" hidden>Demo traffic. These rates are generated on this machine because no cache server is connected.</p>
+<p id="stats" role="status">waiting for the flow feed</p>
+</div>
+</section>
+<section>
+<div class="wrap card">
+<svg id="g" class="flow" viewBox="0 0 900 320" role="img" aria-label="request to near cache to cache hit or miss to database">
+<path id="p-req" class="path" d="M110 160 H260"/>
+<path id="p-near" class="path" d="M360 160 C420 60 520 60 560 80"/>
+<path id="p-hit" class="path" d="M360 160 H560"/>
+<path id="p-miss" class="path" d="M360 160 C420 260 520 260 560 240"/>
+<path id="p-db" class="path" d="M660 240 H790"/>
+<g class="node"><rect x="10" y="135" width="100" height="50" rx="12"/><text x="60" y="165">request</text></g>
+<g class="node"><rect x="260" y="135" width="100" height="50" rx="12"/><text x="310" y="165">near cache</text></g>
+<g class="node"><rect x="560" y="55" width="100" height="50" rx="12"/><text x="610" y="85">near hit</text></g>
+<g class="node"><rect x="560" y="135" width="100" height="50" rx="12"/><text x="610" y="165">cache hit</text></g>
+<g class="node"><rect x="560" y="215" width="100" height="50" rx="12"/><text x="610" y="245">miss</text></g>
+<g class="node"><rect x="790" y="215" width="100" height="50" rx="12"/><text x="840" y="245">DB query</text></g>
+<g id="dots"></g>
+</svg>
+</div>
+</section>
+</main>
+<aside id="assistant" class="card assistant wrap" aria-label="Cache Me Outside agent">
+<h2>Cache Me Outside agent</h2>
+<p class="fine">Ask it to open the console or explain the flow. Page changes do not need a model.</p>
+<form id="agent-form">
+<label class="field">Ask <input id="agent-q" maxlength="500" autocomplete="off" placeholder="explain flow"></label>
+<div class="row"><button class="btn p" type="submit">Ask</button><button class="btn" type="button" data-ask="explain flow">Explain flow</button><button class="btn" type="button" data-ask="open console">Open console</button></div>
+</form>
+<pre id="agent-out" class="out" role="status"></pre>
+</aside>
+<footer><div class="wrap"><span>Cache Me Outside</span><a href="/console">Console</a></div></footer>
+<script src="/assets/site.js" type="module"></script>
+<script src="/assets/flow.js" type="module"></script>
+</body>
+</html>

@@ -36,4 +36,5 @@ async function poll() {
       `req/s ${rates.req}  near ${rates.near_hit}  hit ${rates.cache_hit}  miss ${rates.miss}  db ${rates.db}  hit ratio ${hr}`;
   } catch (e) { document.getElementById("stats").textContent = "feed unavailable"; }
 }
-poll(); setInterval(poll, 1000); requestAnimationFrame(tick);
+poll(); setInterval(poll, 1000);
+if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) requestAnimationFrame(tick);
