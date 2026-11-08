@@ -1,0 +1,8 @@
+{
+  "name": "cache-me-outside",
+  "version": "1.0.0",
+  "api": "v1",
+  "repository": "https://github.com/GoDeskio/Cache-Me-Outside",
+  "release_prefix": "cmo-integration-v",
+  "asset": "cache-me-outside-integration.tar.gz"
+}

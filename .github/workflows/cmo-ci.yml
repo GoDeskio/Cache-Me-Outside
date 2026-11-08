@@ -360,3 +360,37 @@ jobs:
           test "$masters" -eq 4
           kubectl exec cmo-cmo-data-0 -- valkey-cli -h 127.0.0.1 -c --user admin -a "$pass" --no-auth-warning \
             GET cmo:kind | grep -qx before
+
+  site:
+    name: Site, integration, and browser
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Unit tests for the site and the management API
+        run: |
+          python3 tools/mgmt/test_cmo_mgmt.py
+          python3 tools/mgmt/test_cmo_browse.py
+          python3 tools/flowview/test_flow_feed.py
+          python3 site/test_site.py
+          python3 integration/test_integration.py
+
+      - name: Install Playwright
+        working-directory: site/e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Browser tests
+        working-directory: site/e2e
+        run: npx playwright test
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: site-screenshots
+          path: site/e2e/screenshots/*.png
+          if-no-files-found: error

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cache Me Outside</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header>
+<div class="wrap nav">
+<a class="brand" href="/"><svg class="mark" viewBox="0 0 32 32" width="34" height="34" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#17211d"/><path d="M7 21c2.2-7 5.2-10 9-10s6.8 3 9 10" fill="none" stroke="#e7b56a" stroke-width="2"/><circle cx="16" cy="11" r="2.2" fill="#9be7c4"/></svg>Cache Me Outside</a>
+<button id="menu" type="button" aria-expanded="false" aria-controls="nav">Menu</button>
+<nav id="nav" class="links" aria-label="Main"><a href="/" aria-current="page">Home</a><a href="/console">Console</a><a href="/flow">Flow</a><a href="/integrate">Integrate</a><a class="btn p" href="/console">Open the console</a></nav>
+</div>
+</header>
+<main id="main">
+<section class="hero" id="hero">
+<div class="wrap hero-grid">
+<div class="hero-copy">
+<p class="eyebrow">Cache Me Outside</p>
+<h1>The cache that stays on your desk.</h1>
+<p>Create a database, read its keys, and watch hits and misses move. The agent on this page can do those things with you.</p>
+<div class="cta"><a class="btn p" href="/console">Open the console</a><a class="btn" href="/flow">Watch the flow</a></div>
+</div>
+<aside class="card" aria-label="What you can do here">
+<h2>On this site</h2>
+<ul>
+<li>A database with its own port and a password shown once</li>
+<li>A read-only browser that stays inside that database</li>
+<li>A live picture of the request path</li>
+</ul>
+</aside>
+</div>
+</section>
+<section>
+<div class="wrap">
+<h2>What it does</h2>
+<p class="lead">Everything on this page is Cache Me Outside. Names of other products appear only where a card points at a similar feature.</p>
+<div class="grid">
+<article class="card"><h3>Databases</h3><p>Each database gets a port, a password that is returned once, and a key prefix. A limit of zero means unlimited.</p></article>
+<article class="card"><h3>Key browser</h3><p>Browse is read-only. It will not return a key that sits outside the database prefix, and it will not run a write.</p></article>
+<article class="card"><h3>Live flow</h3><p>Requests split into a near-cache hit, a cache hit, or a miss that continues to the database.</p></article>
+<article class="card"><h3>Warm restart</h3><p>A clean shutdown can leave a checkpoint for the next process when the usual snapshot did not. It stays off until you turn it on.</p></article>
+<article class="card"><h3>Hybrid storage</h3><p>Large strings can spill to a flash log. That path stays off until you configure it.</p></article>
+<article class="card"><h3>TTL segments</h3><p>Keys that expire in the same time bucket can be removed together. That path stays off until you configure it.</p></article>
+<article class="card"><h3>Same wire protocol</h3><p>Clients that already speak this protocol keep working. Comparable caches:</p><p class="srcs"><a class="src" href="https://valkey.io">Valkey</a><a class="src" href="https://redis.io">Redis</a><a class="src" href="https://memcached.org">Memcached</a></p></article>
+<article class="card"><h3>The rest of the desk</h3><p>Cache Me Outside is the cache. These GoDesk tools cover the neighboring jobs.</p><p class="srcs"><a class="src" href="https://gitgoat.io">GitGoat</a><a class="src" href="https://github.com/GoDeskio/RailYard">RailYard</a><a class="src" href="https://github.com/GoDeskio/Portkyl">Portkyl</a><a class="src" href="https://github.com/GoDeskio/Komboe">Komboe</a><a class="src" href="https://github.com/GoDeskio/Cerebro-Browser">Cerebro</a></p></article>
+</div>
+</div>
+</section>
+</main>
+<aside id="assistant" class="card assistant wrap" aria-label="Cache Me Outside agent">
+<h2>Cache Me Outside agent</h2>
+<p class="fine">List, create, browse, and open pages without a model. A local model is used only when OLLAMA_BASE_URL is set.</p>
+<form id="agent-form">
+<label class="field">Ask <input id="agent-q" name="ask" maxlength="500" autocomplete="off" placeholder="create database acme"></label>
+<div class="row">
+<button class="btn p" type="submit">Ask</button>
+<button class="btn" type="button" data-ask="list databases">List databases</button>
+<button class="btn" type="button" data-ask="explain tenants">Explain tenants</button>
+<button class="btn" type="button" data-ask="open flow">Open flow</button>
+</div>
+</form>
+<pre id="agent-out" class="out" role="status"></pre>
+</aside>
+<footer><div class="wrap"><span>Cache Me Outside</span><span><a href="/console">Console</a> · <a href="/flow">Flow</a> · <a href="/integrate">Integrate</a></span></div></footer>
+<script src="/assets/site.js" type="module"></script>
+</body>
+</html>

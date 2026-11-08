@@ -13,8 +13,9 @@ Endpoints (bearer token from env CMO_ADMIN_TOKEN, required):
   PATCH  /v1/databases/{name}           limits only
   DELETE /v1/databases/{name}
   POST   /v1/databases/{name}/rotate-password
+  GET    /v1/databases/{name}/keys      read-only, prefix-locked browser
   GET    /v1/openapi.json
-  GET    /            web console (token is typed in the page, kept in memory only)
+  GET    /  /console /flow /integrate   site pages (scripts and styles are separate files)
 
 The proxy reads its config at start, so restart it after changes.
 
@@ -32,6 +33,7 @@ import secrets
 import socket
 import tempfile
 import threading
+from urllib.parse import parse_qs, urlsplit
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9-]{1,30}$")
 LIMITS = ("max_conns", "ops_per_sec", "bytes_per_sec")
@@ -184,6 +186,53 @@ class Manager:
         self.acl.set_user(name, password)
         return {"name": name, "password": password, "note": "Shown once. Old password stops working now."}
 
+    def open_browser(self):
+        """Read-only connection. Tests inject browser_conn; otherwise the admin user is used."""
+        factory = getattr(self, "browser_conn", None)
+        if factory is not None:
+            return factory()
+        import cmo_browse
+        host, port = self.acl.addr
+        return cmo_browse.Conn(host, port, self.acl.user, self.acl.password)
+
+    def keys(self, name, path):
+        """SCAN or one key, only under '<name>:'. Writes are refused by the browser connection."""
+        self.get(name)
+        import cmo_browse
+        q = parse_qs(urlsplit(path).query)
+
+        def one(k, default=None):
+            v = q.get(k)
+            return v[0] if v else default
+
+        match = one("match", "*")
+        if not isinstance(match, str) or len(match) > 128:
+            raise ApiError(400, "match is too long")
+        key = one("key")
+        cursor = one("cursor", "0")
+        conn = self.open_browser()
+        try:
+            if key is not None:
+                if len(key) > 512:
+                    raise ApiError(400, "key is too long")
+                try:
+                    row = cmo_browse.show(conn, name, key)
+                except PermissionError:
+                    raise ApiError(403, "key outside this database")
+                if row is None:
+                    raise ApiError(404, "no such key")
+                return row
+            if not str(cursor).isdigit() or len(str(cursor)) > 20:
+                raise ApiError(400, "cursor must be a number")
+            return cmo_browse.scan(conn, name, str(cursor), match)
+        except ValueError as e:
+            raise ApiError(400, str(e))
+        finally:
+            try:
+                conn.close()
+            except OSError:
+                pass
+
 
 OPENAPI = {
     "openapi": "3.0.3",
@@ -198,8 +247,26 @@ OPENAPI = {
         "/v1/databases/{name}": {"get": {"summary": "Get one"}, "patch": {"summary": "Change limits"},
                                  "delete": {"summary": "Delete (keys are kept)"}},
         "/v1/databases/{name}/rotate-password": {"post": {"summary": "New password, returned once"}},
+        "/v1/databases/{name}/keys": {"get": {"summary": "Read-only keys under the database prefix"}},
     },
 }
+
+
+_GATE = None
+
+
+def _gate():
+    """Load site/gate.py by path so this tool does not depend on the process cwd."""
+    global _GATE
+    if _GATE is not None:
+        return _GATE
+    import importlib.util
+    path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "site", "gate.py"))
+    spec = importlib.util.spec_from_file_location("cmo_site_gate", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    _GATE = mod
+    return mod
 
 
 def make_handler(mgr, token):
@@ -218,19 +285,6 @@ def make_handler(mgr, token):
             self.end_headers()
             self.wfile.write(body)
 
-        def _console(self):
-            with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "console.html"), "rb") as f:
-                body = f.read()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Content-Security-Policy",
-                             "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'")
-            self.send_header("X-Frame-Options", "DENY")
-            self.send_header("Referrer-Policy", "no-referrer")
-            self.end_headers()
-            self.wfile.write(body)
-
         def _body(self):
             n = int(self.headers.get("Content-Length") or 0)
             if n > 65536:
@@ -244,13 +298,18 @@ def make_handler(mgr, token):
             return b
 
         def _route(self, method):
-            if method == "GET" and self.path.split("?")[0] in ("/", "/console"):
-                return self._console()
+            gate = _gate()
+            if gate.try_public(self, mgr, token, method):
+                return
+            if not self.path.split("?")[0].startswith("/v1/"):
+                return self._send(404, {"error": "not found"})
             try:
                 auth = self.headers.get("Authorization", "")
                 if not hmac.compare_digest(auth.encode(), ("Bearer " + token).encode()):
                     raise ApiError(401, "unauthorized")
                 p = self.path.split("?")[0].rstrip("/")
+                if p == "/v1/agent" and method == "POST":
+                    return self._send(200, gate.agent_run(mgr, self._body().get("message")))
                 parts = p.split("/")[1:]
                 if p == "/v1/openapi.json" and method == "GET":
                     return self._send(200, OPENAPI)
@@ -269,11 +328,15 @@ def make_handler(mgr, token):
                         return self._send(200, mgr.update(n, self._body()))
                     if method == "DELETE":
                         return self._send(200, mgr.delete(n))
+                elif len(parts) == 4 and parts[3] == "keys" and method == "GET":
+                    return self._send(200, mgr.keys(parts[2], self.path))
                 elif len(parts) == 4 and parts[3] == "rotate-password" and method == "POST":
                     return self._send(200, mgr.rotate(parts[2]))
                 raise ApiError(405 if len(parts) <= 4 else 404, "method not allowed")
             except ApiError as e:
                 self._send(e.status, {"error": str(e)})
+            except ValueError as e:
+                self._send(400, {"error": str(e)})
             except OSError:
                 self._send(502, {"error": "server unreachable"})
 

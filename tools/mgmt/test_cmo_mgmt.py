@@ -75,10 +75,17 @@ class T(unittest.TestCase):
         import urllib.request
         with urllib.request.urlopen(self.base + "/") as r:
             html = r.read().decode()
+            csp = r.headers["Content-Security-Policy"]
             self.assertEqual(r.headers["X-Frame-Options"], "DENY")
-            self.assertIn("connect-src 'self'", r.headers["Content-Security-Policy"])
-        self.assertIn("Create database", html)
+            self.assertIn("connect-src 'self'", csp)
+            self.assertNotIn("unsafe-inline", csp)
+        self.assertIn('id="hero"', html)
         self.assertNotIn("innerHTML", html)
+        self.assertNotIn("<script>", html)
+        with urllib.request.urlopen(self.base + "/console") as r:
+            page = r.read().decode()
+        self.assertIn("Create database", page)
+        self.assertNotIn("innerHTML", page)
 
     def test_openapi(self):
         self.assertIn("/v1/databases", self.c("GET", "/v1/openapi.json")[1]["paths"])

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Integrate · Cache Me Outside</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header>
+<div class="wrap nav">
+<a class="brand" href="/"><svg class="mark" viewBox="0 0 32 32" width="34" height="34" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#17211d"/><path d="M7 21c2.2-7 5.2-10 9-10s6.8 3 9 10" fill="none" stroke="#e7b56a" stroke-width="2"/><circle cx="16" cy="11" r="2.2" fill="#9be7c4"/></svg>Cache Me Outside</a>
+<button id="menu" type="button" aria-expanded="false" aria-controls="nav">Menu</button>
+<nav id="nav" class="links" aria-label="Main"><a href="/">Home</a><a href="/console">Console</a><a href="/flow">Flow</a><a href="/integrate" aria-current="page">Integrate</a></nav>
+</div>
+</header>
+<main id="main">
+<section class="page-head">
+<div class="wrap">
+<p class="eyebrow">Integrate</p>
+<h1>Drop the cache into another GoDesk app.</h1>
+<p class="lead">Copy the integration directory or point a script tag at a release. The token stays in the environment.</p>
+</div>
+</section>
+<section>
+<div class="wrap grid">
+<article class="card">
+<h2>Python</h2>
+<pre>import os
+from cache_me_outside import Client
+
+client = Client(os.environ["CMO_API"], os.environ["CMO_ADMIN_TOKEN"])
+print(client.list_databases())</pre>
+</article>
+<article class="card">
+<h2>Browser or Node</h2>
+<pre>const cache = CacheMeOutside.attach({
+  api: process.env.CMO_API,
+  token: process.env.CMO_ADMIN_TOKEN
+});
+const rows = await cache.listDatabases();</pre>
+</article>
+<article class="card">
+<h2>Sidecar</h2>
+<pre>CMO_API=http://127.0.0.1:8088 \
+CMO_ADMIN_TOKEN="$CMO_ADMIN_TOKEN" \
+python3 integration/sidecar.py</pre>
+<p class="fine">Then GET http://127.0.0.1:8099/health from the app.</p>
+</article>
+<article class="card">
+<h2>This build</h2>
+<p>The running site reports its integration version. Updating is a separate command, integration/updater.py, and it checks a published checksum before replacing files.</p>
+<button id="show-version" class="btn p" type="button">Show version</button>
+<p id="version-out" role="status"></p>
+</article>
+</div>
+</section>
+</main>
+<aside id="assistant" class="card assistant wrap" aria-label="Cache Me Outside agent">
+<h2>Cache Me Outside agent</h2>
+<p class="fine">It can open the console from here. It cannot read a token out of the repository, because there isn't one.</p>
+<form id="agent-form">
+<label class="field">Ask <input id="agent-q" maxlength="500" autocomplete="off" placeholder="explain integration"></label>
+<div class="row"><button class="btn p" type="submit">Ask</button><button class="btn" type="button" data-ask="explain integration">Explain integration</button><button class="btn" type="button" data-ask="open console">Open console</button></div>
+</form>
+<pre id="agent-out" class="out" role="status"></pre>
+</aside>
+<footer><div class="wrap"><span>Cache Me Outside</span><a href="/">Home</a></div></footer>
+<script src="/assets/site.js" type="module"></script>
+</body>
+</html>

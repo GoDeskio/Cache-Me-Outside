@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Console · Cache Me Outside</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header>
+<div class="wrap nav">
+<a class="brand" href="/"><svg class="mark" viewBox="0 0 32 32" width="34" height="34" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#17211d"/><path d="M7 21c2.2-7 5.2-10 9-10s6.8 3 9 10" fill="none" stroke="#e7b56a" stroke-width="2"/><circle cx="16" cy="11" r="2.2" fill="#9be7c4"/></svg>Cache Me Outside</a>
+<button id="menu" type="button" aria-expanded="false" aria-controls="nav">Menu</button>
+<nav id="nav" class="links" aria-label="Main"><a href="/">Home</a><a href="/console" aria-current="page">Console</a><a href="/flow">Flow</a><a href="/integrate">Integrate</a></nav>
+</div>
+</header>
+<main id="main">
+<section class="page-head">
+<div class="wrap">
+<p class="eyebrow">Console</p>
+<h1>Databases</h1>
+<p class="lead">The token stays in this page's memory. Passwords are shown once and are not stored by this tool.</p>
+</div>
+</section>
+<section>
+<div class="wrap">
+<p id="demo-banner" class="banner" hidden>Local demo on this machine. A sample key named welcome is added with each database.</p>
+<p><label class="field">Admin token <input id="tok" type="password" autocomplete="off"></label>
+<button id="load" class="btn" type="button">Load</button></p>
+<form id="create" class="card">
+<h2>Create database</h2>
+<label class="field">Name <input id="name" required maxlength="31" autocomplete="off" placeholder="my-app" title="A lowercase letter, then letters, digits, or dashes"></label>
+<label class="field">Ops per second, blank for unlimited <input id="ops" type="number" min="0" inputmode="numeric"></label>
+<label class="field">Max connections, blank for unlimited <input id="conns" type="number" min="0" inputmode="numeric"></label>
+<label class="field">Bytes per second, blank for unlimited <input id="bytes" type="number" min="0" inputmode="numeric"></label>
+<button class="btn p" type="submit">Create database</button>
+</form>
+<p id="err" class="err" role="alert"></p>
+<div id="result" class="card" hidden></div>
+<section id="browser" hidden>
+<h2 id="bname">Keys</h2>
+<form id="bform" class="row"><label class="field">Match <input id="bmatch" value="*"></label><button class="btn" type="submit">Search keys</button><button class="btn" type="button" id="bmore" hidden>More</button></form>
+<ul id="keys" class="keys"></ul>
+<div id="kv" class="card" hidden></div>
+</section>
+<div id="dbs" class="db"></div>
+</div>
+</section>
+</main>
+<aside id="assistant" class="card assistant wrap" aria-label="Cache Me Outside agent">
+<h2>Cache Me Outside agent</h2>
+<p class="fine">Create, delete, rotate, limit, and browse from this box. Those actions run without a model.</p>
+<form id="agent-form">
+<label class="field">Ask <input id="agent-q" maxlength="500" autocomplete="off" placeholder="browse acme"></label>
+<div class="row">
+<button class="btn p" type="submit">Ask</button>
+<button class="btn" type="button" data-ask="list databases">List databases</button>
+<button class="btn" type="button" data-ask="create database demo">Create demo</button>
+</div>
+</form>
+<pre id="agent-out" class="out" role="status"></pre>
+</aside>
+<footer><div class="wrap"><span>Cache Me Outside</span><a href="/">Home</a></div></footer>
+<script src="/assets/site.js" type="module"></script>
+<script src="/assets/console.js" type="module"></script>
+</body>
+</html>

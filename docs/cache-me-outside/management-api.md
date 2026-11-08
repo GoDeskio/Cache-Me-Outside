@@ -19,8 +19,15 @@ Not done yet:
 - **Terraform provider:** the plan also lists one. It needs a separate Go module that calls this API; that is a follow-up.
 - **Live test:** the API has not been run against a live server. The tests use a fake ACL backend.
 
-## Web console (plan item 61)
+`GET /v1/databases/{name}/keys` is the read-only browser. It scans and reads only keys under `<name>:` and refuses a key outside that prefix. A limit of 0 means unlimited.
 
-Open `/` on the management API to use the console. Paste the admin token, give the new database a name, and click **Create database**. The page then shows the connection URL, a `valkey-cli` command, and the key prefix the database must use. The password is shown once. Each database also has a **New password** button.
+## Site
 
-The page keeps the token in memory only; nothing is saved in the browser. It sends a strict CSP header and refuses to be framed. It inserts text with textContent only, never innerHTML.
+`python3 site/server.py --demo` serves the site on `127.0.0.1` with an in-memory database, a sample key, and the agent. It will not bind a public address. The real process is the same pages on `cmo_mgmt.py` or `site/server.py --config`, with `CMO_ADMIN_TOKEN` supplied in the environment.
+
+- `/` is the home page.
+- `/console` creates, limits, rotates, browses, and deletes databases. The token stays in memory. The password is shown once in a field, not in a link.
+- `/flow` is the live data-flow picture. Demo rates are labeled as demo traffic.
+- `/integrate` shows the adoption snippets from [INTEGRATION.md](../../INTEGRATION.md).
+
+The agent runs list, create, delete, rotate, limit, browse, explain, and open-page requests without a model. Free-form text uses `OLLAMA_BASE_URL` only. Pages are scripts and stylesheets, so the CSP does not use `unsafe-inline`. The pages refuse to be framed and insert text with textContent only.
