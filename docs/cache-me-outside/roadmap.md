@@ -25,3 +25,7 @@ The full competitor-derived plan (77 features, phased) is in [rea-feature-plan.m
 9. **Backup the per-node volumes.** Sentinel and cluster each have their own volume. A proposal is one restic (or equivalent) job per volume, restoring through `valkey-check-aof` before the node is allowed to rejoin. Do not snapshot a live AOF rewrite in place without `BGREWRITEAOF` finishing first.
 
 10. **HorizontalPodAutoscaler.** Not proposed. Adding a pod does not move hash slots, and removing one drops a shard. The chart deliberately has no HPA. Scale with the cluster add/remove scripts or the scale Job.
+
+## Parked / future ideas
+
+- **DDR3 network-RAM tier.** A parked possibility: reuse an old DDR3 server as a volatile far-RAM Cache-Me-Outside host, and optionally as an NVMe-over-TCP RAM disk, instead of a CXL expander. Not scheduled and not a commitment to build. See [the spec](../research/ddr3-network-ram-tier.md).

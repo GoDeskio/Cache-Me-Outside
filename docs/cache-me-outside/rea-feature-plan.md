@@ -185,3 +185,7 @@ The owner approved these. They override the earlier open ranges in the rows abov
 - **Console sign-in.** Self-hosted Authentik, OIDC. Group claims map onto the roles from PR #45: `viewer`, `developer`, `admin`, `owner`. An IdP group does not grant `owner`. Code: `tools/console/authentik.py`.
 - **FIPS.** Optional build. `make BUILD_FIPS=yes` defines `CMO_BUILD_FIPS`. The default build does not. `INFO server` reports `cmo_fips_build`.
 - **SOC 2.** Readiness documents under `docs/compliance`. They are drafts for an audit, not a certification and not a claim that an audit has happened.
+
+## Parked / future ideas
+
+- DDR3 network-RAM tier (not scheduled): [docs/research/ddr3-network-ram-tier.md](../research/ddr3-network-ram-tier.md).
